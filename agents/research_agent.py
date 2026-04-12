@@ -1,4 +1,3 @@
-# agents/research_agent.py - works with langchain 0.3+ / langgraph
 from langchain_core.tools import Tool
 from langchain_core.messages import HumanMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -7,7 +6,21 @@ from langchain.agents import create_agent
 from utils.llm import get_llm
 from tools.web_search import web_search
 from tools.summarizer import summarize
-from rag.vector_store import retrieve_docs
+from tools.rag_tool import rag_tool
+from rag.vector_store import retriever
+
+system_prompt = """
+You are an AI research assistant.
+
+Your job is to answer user queries accurately using available tools.
+
+Rules:
+- Use the RAG tool when the query relates to stored documents or knowledge base.
+- Use the Web Search tool when the query requires real-time or external information.
+- Do not make up answers.
+- If unsure, use tools instead of guessing.
+- Always try to provide grounded and factual responses.
+"""
 
 llm = get_llm()
 
@@ -15,12 +28,12 @@ tools = [
     Tool(
         name="WebSearch",
         func=web_search,
-        description="Search the web for research information. Input should be a search query string."
+        description="Use this to get real-time or external information from the internet."
     ),
     Tool(
         name="Retriever",
-        func=retrieve_docs,
-        description="Retrieve stored documents from the vector store. Input should be a query string."
+        func=rag_tool,
+        description="Use this to retrieve relevant information from the internal knowledge base."
     ),
     Tool(
         name="Summarizer",
@@ -29,13 +42,31 @@ tools = [
     )
 ]
 
-# LangGraph's create_react_agent - no AgentExecutor needed
-agent = create_agent(llm, tools=tools)
+agent = create_agent(llm, tools=tools, system_prompt=system_prompt)
 
-def run_agent(query: str) -> str:
-    """Run the research agent with a given query."""
+def run_agent(query: str):
     result = agent.invoke({
         "messages": [HumanMessage(content=query)]
     })
-    # Extract the last AI message as the final answer
-    return result["messages"][-1].content
+
+    messages = result["messages"]
+
+    tools_used = []
+
+    # Extract tool usage
+    for msg in messages:
+        # Tool messages usually have 'name'
+        if hasattr(msg, "name") and msg.name:
+            tools_used.append(msg.name)
+
+    # Remove duplicates
+    tools_used = list(set(tools_used))
+
+    final_output = messages[-1].content
+
+    return {
+        "tools_used": tools_used,
+        "result": final_output
+    }
+
+
