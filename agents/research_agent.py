@@ -1,72 +1,214 @@
-from langchain_core.tools import Tool
-from langchain_core.messages import HumanMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.agents import create_agent
+# ==================================================================================================
+# NOTE:
+# This project supports two execution modes:
+#
+# 1. Dynamic Multi-Agent Flow (with Supervisor)
+#    - Flexible and intelligent
+#    - Higher cost and latency
+#
+# 2. Static Pipeline Flow (current active)
+#    - Researcher → Analyzer → Writer
+#    - Optimized for cost and performance
+#
+# The supervisor-based approach is commented out
+# but can be re-enabled for complex queries.
+#===================================================================================================
 
-from utils.llm import get_llm
-from tools.web_search import web_search
-from tools.summarizer import summarize
-from tools.rag_tool import rag_tool
-from rag.vector_store import retriever
+# Architecture of the dynamic multi-agent flow:
+#     User Query → Supervisor → Researcher → Supervisor → Analyzer → Supervisor → Writer → FINISH
 
-system_prompt = """
-You are an AI research assistant.
+# ==================================================================================================
 
-Your job is to answer user queries accurately using available tools.
 
-Rules:
-- Use the RAG tool when the query relates to stored documents or knowledge base.
-- Use the Web Search tool when the query requires real-time or external information.
-- Do not make up answers.
-- If unsure, use tools instead of guessing.
-- Always try to provide grounded and factual responses.
-"""
 
-llm = get_llm()
+import json
+import uuid
+import logging
+from langgraph.graph import StateGraph, END
 
-tools = [
-    Tool(
-        name="WebSearch",
-        func=web_search,
-        description="Use this to get real-time or external information from the internet."
-    ),
-    Tool(
-        name="Retriever",
-        func=rag_tool,
-        description="Use this to retrieve relevant information from the internal knowledge base."
-    ),
-    Tool(
-        name="Summarizer",
-        func=summarize,
-        description="Summarize research text. Input should be the text you want summarized."
-    )
-]
+from agents.state import ResearchState
+# from agents.supervisor import supervisor_node
+from agents.researcher import researcher_node
+from agents.analyzer import analyzer_node
+from agents.writer import writer_node
+from utils.memory import session_manager
 
-agent = create_agent(llm, tools=tools, system_prompt=system_prompt)
+logger = logging.getLogger(__name__)
 
-def run_agent(query: str):
-    result = agent.invoke({
-        "messages": [HumanMessage(content=query)]
-    })
 
-    messages = result["messages"]
+# def route_supervisor(state: ResearchState) -> str:
+#     """
+#     Conditional edge function — routes from Supervisor to the next agent.
+#     Returns the name of the next node to execute based on Supervisor's decision.
+#     """
+#     next_agent = state.get("next_agent", "FINISH")
 
-    tools_used = []
+#     if next_agent == "Researcher":
+#         return "researcher"
+#     elif next_agent == "Analyzer":
+#         return "analyzer"
+#     elif next_agent == "Writer":
+#         return "writer"
+#     else:
+#         return END
 
-    # Extract tool usage
-    for msg in messages:
-        # Tool messages usually have 'name'
-        if hasattr(msg, "name") and msg.name:
-            tools_used.append(msg.name)
+def build_static_research_graph() -> StateGraph:
+    """
+    Simple deterministic pipeline:
+    Researcher → Analyzer → Writer → END
 
-    # Remove duplicates
-    tools_used = list(set(tools_used))
+    Optimized for low cost and latency.
+    """
+    graph = StateGraph(ResearchState)
 
-    final_output = messages[-1].content
+    # Add agent nodes
+    graph.add_node("researcher", researcher_node)
+    graph.add_node("analyzer", analyzer_node)
+    graph.add_node("writer", writer_node)
 
-    return {
-        "tools_used": tools_used,
-        "result": final_output
+    # Entry point
+    graph.set_entry_point("researcher")
+
+    # Linear flow
+    graph.add_edge("researcher", "analyzer")
+    graph.add_edge("analyzer", "writer")
+    graph.add_edge("writer", END)
+
+    compiled = graph.compile()
+    logger.info("Simple research pipeline compiled")
+
+    return compiled
+
+#=================================================================================================
+# def build_research_graph() -> StateGraph:
+#     """
+#     Build the multi-agent research pipeline graph.
+
+#     Returns:
+#         Compiled LangGraph StateGraph ready for execution.
+#     """
+#     graph = StateGraph(ResearchState)
+
+#     # Add agent nodes
+#     graph.add_node("supervisor", supervisor_node)
+#     graph.add_node("researcher", researcher_node)
+#     graph.add_node("analyzer", analyzer_node)
+#     graph.add_node("writer", writer_node)
+
+#     # Set entry point
+#     graph.set_entry_point("supervisor")
+
+#     # Supervisor routes conditionally to the next agent
+#     graph.add_conditional_edges(
+#         "supervisor",
+#         route_supervisor,
+#         {
+#             "researcher": "researcher",
+#             "analyzer": "analyzer",
+#             "writer": "writer",
+#             END: END,
+#         },
+#     )
+
+#     # All worker agents route back to supervisor after completion
+#     graph.add_edge("researcher", "supervisor")
+#     graph.add_edge("analyzer", "supervisor")
+#     graph.add_edge("writer", "supervisor")
+
+#     compiled = graph.compile()
+#     logger.info("Research pipeline graph compiled successfully")
+
+#     return compiled
+#==========================================================================================
+
+
+# ===== Choose execution mode =====
+
+# research_graph = build_research_graph()  # Dynamic (expensive)
+research_graph = build_static_research_graph()  # Static (optimized)
+
+#==========================================================================================
+
+
+
+def run_research(query: str, session_id: str = None) -> dict:
+    """
+    Execute the full multi-agent research pipeline.
+
+    Args:
+        query: The research question or topic.
+        session_id: Optional session ID for conversation memory.
+
+    Returns:
+        Dict containing: report, citations, agent_steps, session_id
+    """
+    if not session_id:
+        session_id = str(uuid.uuid4())
+
+    logger.info(f"Starting research pipeline | session={session_id} | query={query}")
+
+    # Get conversation context from memory
+    conversation_context = session_manager.get_context(session_id)
+
+    # Initialize the state
+    initial_state = {
+        "messages": [],
+        "research_query": query,
+        "conversation_context": conversation_context,
+        "research_data": "",
+        "analysis": "",
+        "report": "",
+        "citations": [],
+        # "next_agent": "",
+        "completed_agents": [],
+        "agent_steps": [],
+        "session_id": session_id,
     }
 
+    try:
+        # Execute the graph
+        logger.info("Running in SIMPLE PIPELINE mode")
+        final_state = research_graph.invoke(initial_state)
+        # can add here recursion limit if looped in future
 
+        # Parse the report
+        report_data = {}
+        if final_state.get("report"):
+            try:
+                report_data = json.loads(final_state["report"])
+            except json.JSONDecodeError:
+                report_data = {
+                    "title": f"Research Report: {query}",
+                    "summary": final_state.get("report", ""),
+                    "key_findings": [],
+                    "detailed_analysis": "",
+                    "recommendations": [],
+                }
+
+        # Store in memory
+        report_summary = report_data.get("summary", "No summary generated.")
+        session_manager.add_interaction(session_id, query, report_summary)
+
+        result = {
+            "session_id": session_id,
+            "report": report_data,
+            "citations": final_state.get("citations", []),
+            "agent_steps": final_state.get("agent_steps", []),
+        }
+        logger.info(f"Research pipeline completed | session={session_id} | steps={len(result['agent_steps'])}")
+        return result
+
+    except Exception as e:
+        logger.error(f"Research pipeline failed: {e}", exc_info=True)
+        return {
+            "session_id": session_id,
+            "report": {
+                "title": f"Research Report: {query}",
+                "summary": f"An error occurred during research: {str(e)}",
+                "key_findings": ["Research pipeline encountered an error."],
+                "detailed_analysis": f"Error details: {str(e)}",
+                "recommendations": ["Please try again with a different query."],
+            },
+            "citations": [],
+            "agent_steps": [],
+        }

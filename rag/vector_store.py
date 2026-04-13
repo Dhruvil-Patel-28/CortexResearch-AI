@@ -1,82 +1,146 @@
-# from langchain_community.embeddings import HuggingFaceEmbeddings
-# from langchain_community.vectorstores import FAISS
-
-# embeddings = HuggingFaceEmbeddings()
-
-# vector_store = FAISS.from_texts(
-#     ["AI agents are autonomous systems that can plan and execute tasks."],
-#     embeddings
-# )
-
-# def retrieve_docs(query):
-#     docs = vector_store.similarity_search(query, k=2)
-#     return "\n".join([d.page_content for d in docs])
-
-
-
-# # rag/vector_store.py
+"""
+Vector store module for document ingestion and retrieval.
+Handles PDF loading, chunking, embedding, and FAISS index management.
+"""
 
 import os
-from langchain_community.document_loaders import PyPDFLoader,DirectoryLoader
+import logging
+from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
+from utils.config import settings
 
-DATA_PATH = "data"
-INDEX_PATH = "faiss_index"
+logger = logging.getLogger(__name__)
+
+# Module-level cache
+_retriever = None
+
 
 def load_documents():
+    """Load all PDF documents from the data directory."""
     docs = []
-    for file in os.listdir(DATA_PATH):
-        if file.endswith(".pdf"):
-            loader = PyPDFLoader(os.path.join(DATA_PATH, file))
-            docs.extend(loader.load())
+    data_path = settings.data_path
+
+    if not os.path.exists(data_path):
+        logger.warning(f"Data directory not found: {data_path}")
+        return docs
+
+    pdf_files = [f for f in os.listdir(data_path) if f.endswith(".pdf")]
+    logger.info(f"Found {len(pdf_files)} PDF files in {data_path}")
+
+    for file in pdf_files:
+        filepath = os.path.join(data_path, file)
+        try:
+            loader = PyPDFLoader(filepath)
+            loaded = loader.load()
+            # Ensure each document has source metadata
+            for doc in loaded:
+                doc.metadata["source_file"] = file
+            docs.extend(loaded)
+            logger.info(f"Loaded {len(loaded)} pages from {file}")
+        except Exception as e:
+            logger.error(f"Failed to load {file}: {e}")
+
     return docs
 
 
 def create_vector_store():
+    """Create a new FAISS vector store from documents in the data directory."""
     docs = load_documents()
 
+    if not docs:
+        logger.warning("No documents loaded — creating empty vector store")
+        embeddings = HuggingFaceEmbeddings(model_name=settings.embedding_model)
+        vectorstore = FAISS.from_texts(
+            ["No documents have been loaded yet."],
+            embeddings,
+            metadatas=[{"source_file": "placeholder", "page": 0}]
+        )
+        vectorstore.save_local(settings.index_path)
+        return vectorstore
+
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=500,
-        chunk_overlap=50
+        chunk_size=settings.chunk_size,
+        chunk_overlap=settings.chunk_overlap,
     )
     chunks = splitter.split_documents(docs)
+    logger.info(f"Split {len(docs)} documents into {len(chunks)} chunks")
 
-    embeddings = HuggingFaceEmbeddings(
-        model_name="all-MiniLM-L6-v2"
-    )
-
+    embeddings = HuggingFaceEmbeddings(model_name=settings.embedding_model)
     vectorstore = FAISS.from_documents(chunks, embeddings)
-    vectorstore.save_local(INDEX_PATH)
+    vectorstore.save_local(settings.index_path)
+    logger.info(f"Vector store saved to {settings.index_path}")
 
     return vectorstore
 
 
 def get_vector_store():
-    embeddings = HuggingFaceEmbeddings(
-        model_name="all-MiniLM-L6-v2"
-    )
+    """Load existing FAISS index or create a new one."""
+    embeddings = HuggingFaceEmbeddings(model_name=settings.embedding_model)
 
-    if os.path.exists(INDEX_PATH):
+    if os.path.exists(settings.index_path):
+        logger.info(f"Loading existing FAISS index from {settings.index_path}")
         return FAISS.load_local(
-                INDEX_PATH,
-                embeddings,
-                allow_dangerous_deserialization=True
-            )
+            settings.index_path,
+            embeddings,
+            allow_dangerous_deserialization=True,
+        )
     else:
+        logger.info("No existing index found — creating new vector store")
         return create_vector_store()
 
 
-# GLOBAL retriever (used everywhere)
-# vectorstore = get_vector_store()
-# retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
+def search_with_relevance(query: str, k: int = None, score_threshold: float = None):
+    """
+    Search the vector store and filter results by relevance score.
+    
+    Only returns documents whose similarity score meets the threshold,
+    preventing irrelevant content from being cited.
+    
+    Args:
+        query: The search query.
+        k: Number of candidates to retrieve before filtering (default from settings).
+        score_threshold: Minimum similarity score (0-1) to include a result (default from settings).
+    
+    Returns:
+        List of (Document, score) tuples that pass the relevance threshold.
+    """
+    k = k or settings.retriever_k
+    score_threshold = score_threshold or settings.relevance_score_threshold
 
-retriever = None
+    vectorstore = get_vector_store()
+
+    try:
+        results = vectorstore.similarity_search_with_relevance_scores(query, k=k)
+    except Exception as e:
+        logger.error(f"Similarity search failed: {e}")
+        return []
+
+    # Filter by relevance threshold
+    filtered = [(doc, score) for doc, score in results if score >= score_threshold]
+
+    logger.info(
+        f"Query: '{query[:80]}...' | "
+        f"Retrieved {len(results)} candidates, "
+        f"{len(filtered)} passed threshold ({score_threshold})"
+    )
+
+    for doc, score in results:
+        source = doc.metadata.get("source_file", "unknown")
+        status = "✓ PASS" if score >= score_threshold else "✗ SKIP"
+        logger.debug(f"  {status}  score={score:.4f}  source={source}")
+
+    return filtered
+
 
 def get_retriever():
-    global retriever
-    if retriever is None:
+    """Get a basic retriever (kept for backward compatibility)."""
+    global _retriever
+    if _retriever is None:
         vectorstore = get_vector_store()
-        retriever = vectorstore.as_retriever()
-    return retriever
+        _retriever = vectorstore.as_retriever(
+            search_kwargs={"k": settings.retriever_k}
+        )
+        logger.info(f"Retriever initialized with k={settings.retriever_k}")
+    return _retriever

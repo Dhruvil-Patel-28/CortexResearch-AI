@@ -1,197 +1,150 @@
-# 🤖 Autonomous AI Researcher
+# 🔬 Autonomous AI Research Agent
 
-An autonomous AI research assistant that takes a user query, decides whether to search the web or retrieve from a local knowledge base, and returns a grounded, summarized answer — all through a multi-tool LangChain agent exposed via a FastAPI backend and a Streamlit UI.
+A **multi-agent AI research pipeline** that autonomously gathers, analyzes, and synthesizes information into structured research reports. Built with LangChain, LangGraph, and FastAPI.
 
----
+## 🏗️ Architecture
+
+```
+User Query
+    ↓
+┌───────────────────────┐
+│   🧠 Supervisor       │  ← Orchestrates the pipeline
+│   (Planner Agent)     │     Decides which agent acts next
+└───────────┬───────────┘
+            ↓
+┌───────────────────────┐
+│   🔍 Researcher       │  ← Gathers information
+│   Tools:              │     - Web Search (DuckDuckGo)
+│   - WebSearch         │     - Knowledge Base (FAISS + RAG)
+│   - RAG Retriever     │
+└───────────┬───────────┘
+            ↓
+┌───────────────────────┐
+│   📊 Analyzer         │  ← Synthesizes findings
+│   - Key findings      │     - Pattern detection
+│   - Gap analysis      │     - Contradiction flagging
+│   - Confidence ratings│
+└───────────┬───────────┘
+            ↓
+┌───────────────────────┐
+│   ✍️ Writer            │  ← Generates final report
+│   - Structured JSON   │     - Title, Summary, Findings
+│   - Citations         │     - Analysis, Recommendations
+└───────────┬───────────┘
+            ↓
+    📋 Structured Research Report
+```
+
+## ✨ Features
+
+- **Multi-Agent Orchestration** — Supervisor pattern using LangGraph `StateGraph` with conditional routing
+- **RAG Pipeline** — PDF document ingestion → chunking → FAISS vector indexing → semantic retrieval with page-level citations
+- **Web Search Integration** — Real-time DuckDuckGo search with source attribution
+- **Conversation Memory** — Session-based memory for multi-turn research conversations
+- **Structured Output** — JSON research reports with title, summary, key findings, analysis, and recommendations
+- **Citation Tracking** — Source document names, page numbers, and content snippets attached to every report
+- **Async API** — FastAPI with async endpoints and typed Pydantic request/response models
+- **Professional UI** — Streamlit chat interface with expandable report sections and execution trace
 
 ## 📁 Project Structure
 
 ```
-Autonomous-AI-Researcher/
+AI_AUTONOMOUS_OPERATOR/
 ├── agents/
-│   └── research_agent.py    # LangChain agent with tool routing logic
+│   ├── state.py              # Shared state definition (TypedDict)
+│   ├── supervisor.py         # Planner/router agent
+│   ├── researcher.py         # Information gathering agent
+│   ├── analyzer.py           # Analysis & synthesis agent
+│   ├── writer.py             # Report generation agent
+│   └── research_agent.py     # LangGraph orchestrator
 ├── api/
-│   └── main.py              # FastAPI endpoint (/research)
-├── rag/
-│   └── vector_store.py      # FAISS vector store: load, embed, index, retrieve
+│   ├── main.py               # FastAPI app (async endpoints)
+│   └── models.py             # Pydantic request/response models
 ├── tools/
-│   ├── web_search.py        # DuckDuckGo search tool
-│   ├── rag_tool.py          # RAG retrieval tool (wraps vector store)
-│   └── summarizer.py        # LLM-based summarization tool
-├── ui/
-│   └── app.py               # Streamlit frontend
+│   ├── web_search.py         # DuckDuckGo search with sources
+│   ├── rag_tool.py           # RAG retrieval with citations
+│   └── summarizer.py         # Structured summarizer
+├── rag/
+│   └── vector_store.py       # FAISS vector store management
 ├── utils/
-│   └── llm.py               # LLM factory (returns configured LLM instance)
-├── data/                    # Place your PDF documents here
-├── faiss_index/             # Auto-generated FAISS index (persisted on disk)
-├── .gitignore
-└── requirements.txt
+│   ├── llm.py                # LLM factory (Anthropic Claude)
+│   ├── config.py             # Centralized configuration
+│   └── memory.py             # Session memory manager
+├── ui/
+│   └── app.py                # Streamlit chat UI
+├── data/                     # PDF documents for RAG
+├── faiss_index/              # Persisted FAISS index
+├── .env.example              # Environment variable template
+├── requirements.txt          # Python dependencies
+└── README.md
 ```
 
----
+## 🚀 Quick Start
 
-## ✨ How It Works
-
-1. **User submits a query** via the Streamlit UI.
-2. The UI sends a POST request to the **FastAPI backend** (`/research`).
-3. The backend calls `run_agent(query)` from `research_agent.py`.
-4. The **LangChain agent** decides which tool(s) to use based on the query:
-   - **WebSearch** — fetches real-time results from DuckDuckGo (top 5 results).
-   - **Retriever** — performs semantic similarity search over local PDF documents using FAISS + `all-MiniLM-L6-v2` embeddings.
-   - **Summarizer** — passes text to the LLM to produce a clean summary.
-5. The agent returns the final answer along with a list of tools it used.
-6. The result is displayed back in the Streamlit UI.
-
----
-
-## 🛠️ Tech Stack
-
-| Component | Technology |
-|---|---|
-| Agent Framework | LangChain, LangGraph |
-| LLM | Google Gemini (`langchain-google-genai`) |
-| Embeddings | `sentence-transformers` — `all-MiniLM-L6-v2` |
-| Vector Store | FAISS (persisted locally in `faiss_index/`) |
-| Web Search | DuckDuckGo Search (`duckduckgo-search`) |
-| API Backend | FastAPI + Uvicorn |
-| Frontend | Streamlit |
-| Document Loader | LangChain `PyPDFLoader` |
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-- Python 3.10+
-- A Google Gemini API key
-
-### 1. Clone the Repository
+### 1. Clone & Setup
 
 ```bash
-git clone https://github.com/Dhruvil-Patel-28/Autonomous-AI-Researcher.git
-cd Autonomous-AI-Researcher
-```
-
-### 2. Create a Virtual Environment
-
-```bash
+git clone <your-repo-url>
+cd AI_AUTONOMOUS_OPERATOR
 python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
-```
-
-### 3. Install Dependencies
-
-```bash
+venv\Scripts\activate        # Windows
+# source venv/bin/activate   # macOS/Linux
 pip install -r requirements.txt
 ```
 
-### 4. Configure Environment Variables
+### 2. Configure Environment
 
-Create a `.env` file in the project root:
-
-```env
-GOOGLE_API_KEY=your_google_gemini_api_key
+```bash
+cp .env.example .env
+# Edit .env and add your Anthropic API key
 ```
 
-### 5. Add Documents to the Knowledge Base (Optional)
+### 3. Add Documents (Optional)
 
-Drop any PDF files you want the agent to reference into the `data/` folder. The FAISS index will be built automatically on first run. If no PDFs are present, the agent will fall back to web search.
+Place PDF files in the `data/` directory. The system will automatically ingest and index them on first run.
 
----
-
-## ▶️ Running the Application
-
-### Start the FastAPI Backend
+### 4. Start the API Server
 
 ```bash
 uvicorn api.main:app --reload
 ```
 
-API will be available at: `http://127.0.0.1:8000`
-
-### Launch the Streamlit UI
-
-In a separate terminal:
+### 5. Start the UI
 
 ```bash
 streamlit run ui/app.py
 ```
 
-UI will be available at: `http://localhost:8501`
+Open http://localhost:8501 in your browser and start researching!
 
----
+## 🔧 API Endpoints
 
-## 🔌 API Reference
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/health` | Health check |
+| `POST` | `/research` | Execute research pipeline |
+| `GET` | `/sessions/{id}/history` | Get conversation history |
 
-### `POST /research`
-
-Runs the research agent on the provided query.
-
-**Query Parameter:**
-
-| Parameter | Type | Description |
-|---|---|---|
-| `query` | `string` | The research topic or question |
-
-**Example Request:**
+### Example Request
 
 ```bash
-curl -X POST "http://127.0.0.1:8000/research?query=What+is+quantum+computing"
+curl -X POST http://localhost:8000/research \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What are the latest advances in fraud detection using ML?", "session_id": "my-session-1"}'
 ```
 
-**Example Response:**
+## 🛠️ Tech Stack
 
-```json
-{
-  "response": {
-    "tools_used": ["WebSearch"],
-    "result": "Quantum computing is a type of computation that..."
-  }
-}
-```
-
----
-
-## 🧠 Agent Tools
-
-### `WebSearch`
-Queries DuckDuckGo and returns the top 5 result snippets. Used for real-time or external information.
-
-### `Retriever`
-Performs semantic search over locally indexed PDF documents using FAISS. Chunks are split at 500 characters with 50-character overlap and embedded using `all-MiniLM-L6-v2`.
-
-### `Summarizer`
-Takes any research text as input and returns a concise LLM-generated summary.
-
----
-
-## 🗂️ Vector Store Details
-
-- PDFs placed in `data/` are loaded using `PyPDFLoader`.
-- Text is split into 500-character chunks (50 overlap) using `RecursiveCharacterTextSplitter`.
-- Chunks are embedded with HuggingFace's `all-MiniLM-L6-v2`.
-- The FAISS index is saved to `faiss_index/` and reloaded on subsequent runs — no re-indexing needed unless documents change.
-
----
-
-## 📦 Core Dependencies
-
-```
-langchain / langchain-community / langchain-core
-langchain-google-genai
-langgraph
-faiss-cpu
-sentence-transformers
-duckduckgo-search
-fastapi + uvicorn
-streamlit
-python-dotenv
-```
-
-> Full list in [`requirements.txt`](./requirements.txt)
-
----
+| Component | Technology |
+|-----------|------------|
+| LLM | Anthropic Claude (via LangChain) |
+| Agent Framework | LangGraph StateGraph |
+| Vector Store | FAISS |
+| Embeddings | HuggingFace `all-MiniLM-L6-v2` |
+| API | FastAPI (async) |
+| UI | Streamlit |
+| Web Search | DuckDuckGo |
+| Configuration | Pydantic Settings |
 
 ## 👤 Author
 
