@@ -251,110 +251,153 @@ if query:
     with st.chat_message("user"):
         st.markdown(query)
     
-    # Call API
+    # Call API with animated progress
     with st.chat_message("assistant", avatar="🔬"):
-        with st.spinner("🧠 Supervisor is orchestrating the research pipeline..."):
-            try:
-                status_placeholder = st.empty()
-                
-                # Show pipeline stages
-                stages = [
-                    "🔍 Researcher gathering data from knowledge base & web...",
-                    "📊 Analyzer synthesizing findings...",
-                    "✍️  Writer composing the research report...",
-                ]
-                
-                status_placeholder.info(stages[0])
-                
-                response = requests.post(
-                    f"{API_BASE_URL}/research",
-                    json={
-                        "query": query,
-                        "session_id": st.session_state.session_id,
-                    },
-                    timeout=120,
-                )
-                
-                status_placeholder.empty()
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    report = data.get("report", {})
-                    
-                    # Display report
-                    st.markdown(f"### 📋 {report.get('title', 'Research Report')}")
-                    st.markdown(report.get("summary", ""))
-                    
-                    findings = report.get("key_findings", [])
-                    if findings:
-                        st.markdown("#### 🎯 Key Findings")
-                        for finding in findings:
-                            st.markdown(f"- {finding}")
-                    
-                    detailed = report.get("detailed_analysis", "")
-                    if detailed:
-                        with st.expander("📖 Detailed Analysis", expanded=False):
-                            st.markdown(detailed)
-                    
-                    recs = report.get("recommendations", [])
-                    if recs:
-                        with st.expander("💡 Recommendations", expanded=False):
-                            for rec in recs:
-                                st.markdown(f"- {rec}")
-                    
-                    citations = data.get("citations", [])
-                    if citations:
-                        with st.expander(f"📚 Sources & Citations ({len(citations)})", expanded=False):
-                            for i, cit in enumerate(citations, 1):
-                                page_info = f" | Page {cit['page_number']}" if cit.get("page_number") else ""
-                                st.markdown(
-                                    f'<div class="citation-card">'
-                                    f'<strong>[{i}]</strong> {cit["source_name"]}{page_info}<br>'
-                                    f'<em>{cit.get("content_snippet", "")[:150]}...</em>'
-                                    f'</div>',
-                                    unsafe_allow_html=True,
-                                )
-                    
-                    steps = data.get("agent_steps", [])
-                    if steps:
-                        with st.expander(f"🔧 Agent Execution Trace ({len(steps)} steps)", expanded=False):
-                            for step in steps:
-                                tools = ", ".join(step.get("tools_used", [])) if step.get("tools_used") else "None"
-                                st.markdown(
-                                    f'<div class="agent-step">'
-                                    f'<strong>{step["agent_name"]}</strong>: {step["action"]}'
-                                    f'<br>Tools: {tools}'
-                                    f'</div>',
-                                    unsafe_allow_html=True,
-                                )
-                    
-                    # Store in session
-                    st.session_state.chat_history.append({
-                        "role": "assistant",
-                        "content": report.get("summary", ""),
-                        "data": data,
-                        "citations": citations,
-                    })
-                    
-                    # Metrics bar
-                    cols = st.columns(3)
-                    with cols[0]:
-                        st.metric("📚 Sources", len(citations))
-                    with cols[1]:
-                        st.metric("🔧 Agent Steps", len(steps))
-                    with cols[2]:
-                        st.metric("🎯 Key Findings", len(findings))
+        try:
+            import threading
+            import time
 
+            # Pipeline stages shown to the user while the request is in progress
+            stages = [
+                ("🔍 Researcher", "Searching knowledge base & web in parallel..."),
+                ("📊 Analyzer", "Synthesizing findings & detecting patterns..."),
+                ("✍️  Writer", "Composing the structured research report..."),
+            ]
+
+            # Run the API call in a background thread
+            result_container = {"response": None, "error": None}
+            current_session_id = st.session_state.session_id
+
+            def _call_api():
+                try:
+                    result_container["response"] = requests.post(
+                        f"{API_BASE_URL}/research",
+                        json={
+                            "query": query,
+                            "session_id": current_session_id,
+                        },
+                        timeout=120,
+                    )
+                except Exception as e:
+                    result_container["error"] = e
+
+            api_thread = threading.Thread(target=_call_api)
+            api_thread.start()
+
+            # Animate through pipeline stages while waiting
+            progress_bar = st.progress(0, text="Starting research pipeline...")
+            status_placeholder = st.empty()
+
+            stage_idx = 0
+            elapsed = 0.0
+            step_interval = 0.3  # update every 300ms
+
+            while api_thread.is_alive():
+                # Cycle through stages based on elapsed time
+                if elapsed < 3.0:
+                    stage_idx = 0
+                elif elapsed < 5.5:
+                    stage_idx = 1
                 else:
-                    st.error(f"❌ API returned error {response.status_code}: {response.text}")
-                    
-            except requests.exceptions.ConnectionError:
-                st.error(
-                    "❌ Cannot connect to the API server. "
-                    "Make sure the FastAPI server is running:\n\n"
-                    "```bash\nuvicorn api.main:app --reload\n```"
-                )
-            except requests.exceptions.Timeout:
-                st.warning("⏳ The research is taking longer than expected. Please try again.")
-            except Exception as e:
-                st.error(f"❌ An unexpected error occurred: {str(e)}")
+                    stage_idx = 2
+
+                icon, desc = stages[stage_idx]
+                progress_pct = min(0.95, (stage_idx + 1) / len(stages) * 0.9)
+                progress_bar.progress(progress_pct, text=f"**{icon}** — {desc}")
+
+                time.sleep(step_interval)
+                elapsed += step_interval
+
+            # Done — show completion
+            progress_bar.progress(1.0, text="✅ Research complete!")
+            time.sleep(0.4)
+            progress_bar.empty()
+            status_placeholder.empty()
+
+            # Check for errors from the thread
+            if result_container["error"] is not None:
+                raise result_container["error"]
+
+            response = result_container["response"]
+
+            if response.status_code == 200:
+                data = response.json()
+                report = data.get("report", {})
+                
+                # Display report
+                st.markdown(f"### 📋 {report.get('title', 'Research Report')}")
+                st.markdown(report.get("summary", ""))
+                
+                findings = report.get("key_findings", [])
+                if findings:
+                    st.markdown("#### 🎯 Key Findings")
+                    for finding in findings:
+                        st.markdown(f"- {finding}")
+                
+                detailed = report.get("detailed_analysis", "")
+                if detailed:
+                    with st.expander("📖 Detailed Analysis", expanded=False):
+                        st.markdown(detailed)
+                
+                recs = report.get("recommendations", [])
+                if recs:
+                    with st.expander("💡 Recommendations", expanded=False):
+                        for rec in recs:
+                            st.markdown(f"- {rec}")
+                
+                citations = data.get("citations", [])
+                if citations:
+                    with st.expander(f"📚 Sources & Citations ({len(citations)})", expanded=False):
+                        for i, cit in enumerate(citations, 1):
+                            page_info = f" | Page {cit['page_number']}" if cit.get("page_number") else ""
+                            st.markdown(
+                                f'<div class="citation-card">'
+                                f'<strong>[{i}]</strong> {cit["source_name"]}{page_info}<br>'
+                                f'<em>{cit.get("content_snippet", "")[:150]}...</em>'
+                                f'</div>',
+                                unsafe_allow_html=True,
+                            )
+                
+                steps = data.get("agent_steps", [])
+                if steps:
+                    with st.expander(f"🔧 Agent Execution Trace ({len(steps)} steps)", expanded=False):
+                        for step in steps:
+                            tools = ", ".join(step.get("tools_used", [])) if step.get("tools_used") else "None"
+                            st.markdown(
+                                f'<div class="agent-step">'
+                                f'<strong>{step["agent_name"]}</strong>: {step["action"]}'
+                                f'<br>Tools: {tools}'
+                                f'</div>',
+                                unsafe_allow_html=True,
+                            )
+                
+                # Store in session
+                st.session_state.chat_history.append({
+                    "role": "assistant",
+                    "content": report.get("summary", ""),
+                    "data": data,
+                    "citations": citations,
+                })
+                
+                # Metrics bar
+                cols = st.columns(3)
+                with cols[0]:
+                    st.metric("📚 Sources", len(citations))
+                with cols[1]:
+                    st.metric("🔧 Agent Steps", len(steps))
+                with cols[2]:
+                    st.metric("🎯 Key Findings", len(findings))
+
+            else:
+                st.error(f"❌ API returned error {response.status_code}: {response.text}")
+                
+        except requests.exceptions.ConnectionError:
+            st.error(
+                "❌ Cannot connect to the API server. "
+                "Make sure the FastAPI server is running:\n\n"
+                "```bash\nuvicorn api.main:app --reload\n```"
+            )
+        except requests.exceptions.Timeout:
+            st.warning("⏳ The research is taking longer than expected. Please try again.")
+        except Exception as e:
+            st.error(f"❌ An unexpected error occurred: {str(e)}")

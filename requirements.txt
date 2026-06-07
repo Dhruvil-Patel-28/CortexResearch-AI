@@ -17,7 +17,7 @@ faiss-cpu>=1.7.4
 pypdf>=3.0.0
 
 # --- Web Search ---
-duckduckgo-search>=4.0.0
+ddgs>=9.0.0
 
 # --- API Framework ---
 fastapi>=0.110.0

@@ -1,6 +1,9 @@
 """
 Vector store module for document ingestion and retrieval.
 Handles PDF loading, chunking, embedding, and FAISS index management.
+
+Performance: Embedding model and FAISS index are cached as singletons
+to avoid re-loading on every query (~15s savings per request).
 """
 
 import os
@@ -13,8 +16,19 @@ from utils.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Module-level cache
+# ─── Module-level singleton caches ───
+_embeddings = None
+_vectorstore = None
 _retriever = None
+
+
+def get_embeddings():
+    """Get or create the cached embedding model (loaded once)."""
+    global _embeddings
+    if _embeddings is None:
+        logger.info(f"Loading embedding model: {settings.embedding_model} (one-time)")
+        _embeddings = HuggingFaceEmbeddings(model_name=settings.embedding_model)
+    return _embeddings
 
 
 def load_documents():
@@ -48,10 +62,10 @@ def load_documents():
 def create_vector_store():
     """Create a new FAISS vector store from documents in the data directory."""
     docs = load_documents()
+    embeddings = get_embeddings()
 
     if not docs:
         logger.warning("No documents loaded — creating empty vector store")
-        embeddings = HuggingFaceEmbeddings(model_name=settings.embedding_model)
         vectorstore = FAISS.from_texts(
             ["No documents have been loaded yet."],
             embeddings,
@@ -67,7 +81,6 @@ def create_vector_store():
     chunks = splitter.split_documents(docs)
     logger.info(f"Split {len(docs)} documents into {len(chunks)} chunks")
 
-    embeddings = HuggingFaceEmbeddings(model_name=settings.embedding_model)
     vectorstore = FAISS.from_documents(chunks, embeddings)
     vectorstore.save_local(settings.index_path)
     logger.info(f"Vector store saved to {settings.index_path}")
@@ -76,19 +89,25 @@ def create_vector_store():
 
 
 def get_vector_store():
-    """Load existing FAISS index or create a new one."""
-    embeddings = HuggingFaceEmbeddings(model_name=settings.embedding_model)
+    """Load existing FAISS index or create a new one (cached after first call)."""
+    global _vectorstore
+    if _vectorstore is not None:
+        return _vectorstore
+
+    embeddings = get_embeddings()
 
     if os.path.exists(settings.index_path):
         logger.info(f"Loading existing FAISS index from {settings.index_path}")
-        return FAISS.load_local(
+        _vectorstore = FAISS.load_local(
             settings.index_path,
             embeddings,
             allow_dangerous_deserialization=True,
         )
     else:
         logger.info("No existing index found — creating new vector store")
-        return create_vector_store()
+        _vectorstore = create_vector_store()
+
+    return _vectorstore
 
 
 def search_with_relevance(query: str, k: int = None, score_threshold: float = None):

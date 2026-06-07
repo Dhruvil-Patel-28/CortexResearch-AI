@@ -1,6 +1,9 @@
 """
 LLM factory module.
 Provides configured LLM instances for all agents and tools.
+
+Performance: Caches LLM instances by temperature to avoid
+re-creating client objects on every call.
 """
 
 import logging
@@ -9,10 +12,14 @@ from utils.config import settings
 
 logger = logging.getLogger(__name__)
 
+# ─── Cache LLM instances by temperature ───
+_llm_cache: dict[float, ChatAnthropic] = {}
+
 
 def get_llm(temperature: float = None) -> ChatAnthropic:
     """
     Create and return a configured LLM instance.
+    Instances are cached by temperature to avoid redundant client creation.
 
     Args:
         temperature: Override default temperature. Useful for agents that need
@@ -23,10 +30,16 @@ def get_llm(temperature: float = None) -> ChatAnthropic:
     """
     temp = temperature if temperature is not None else settings.temperature
 
+    if temp in _llm_cache:
+        return _llm_cache[temp]
+
     logger.info(f"Initializing LLM: model={settings.model_name}, temperature={temp}")
 
-    return ChatAnthropic(
+    llm = ChatAnthropic(
         model=settings.model_name,
         temperature=temp,
         api_key=settings.anthropic_api_key,
     )
+
+    _llm_cache[temp] = llm
+    return llm

@@ -4,7 +4,7 @@ Returns structured results with source attribution.
 """
 
 import logging
-from duckduckgo_search import DDGS
+from ddgs import DDGS
 
 logger = logging.getLogger(__name__)
 
@@ -21,16 +21,16 @@ def web_search(query: str) -> str:
     """
     try:
         results = []
-        with DDGS() as ddgs:
-            for r in ddgs.text(query, max_results=5):
-                source_title = r.get("title", "Unknown Source")
-                source_url = r.get("href", "No URL")
-                body = r.get("body", "")
-                results.append(
-                    f"[Source: {source_title}]\n"
-                    f"URL: {source_url}\n"
-                    f"{body}"
-                )
+        ddgs = DDGS()
+        for r in ddgs.text(query, max_results=5):
+            source_title = r.get("title", "Unknown Source")
+            source_url = r.get("href", "No URL")
+            body = r.get("body", "")
+            results.append(
+                f"[Source: {source_title}]\n"
+                f"URL: {source_url}\n"
+                f"{body}"
+            )
 
         if not results:
             logger.warning(f"No web search results found for: {query}")

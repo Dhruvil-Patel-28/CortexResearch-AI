@@ -37,8 +37,24 @@ async def lifespan(app: FastAPI):
     logger.info("=" * 60)
     logger.info("Autonomous AI Research Agent — API Starting")
     logger.info("=" * 60)
+
+    # Pre-load expensive resources at startup (not on first request)
+    import asyncio
+    try:
+        logger.info("Warming up: loading embedding model + FAISS index...")
+        await asyncio.to_thread(_warmup_resources)
+        logger.info("Warmup complete — ready to serve requests")
+    except Exception as e:
+        logger.warning(f"Warmup failed (will load on first request): {e}")
+
     yield
     logger.info("API shutting down")
+
+
+def _warmup_resources():
+    """Pre-load embedding model and vector store into cache."""
+    from rag.vector_store import get_vector_store
+    get_vector_store()
 
 
 app = FastAPI(

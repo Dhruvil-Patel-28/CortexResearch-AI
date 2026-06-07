@@ -1,11 +1,13 @@
 """
 Researcher agent — specialized for information gathering.
 Uses web search and RAG tools to collect data on the research topic.
+
+Performance: RAG search and web search run in parallel using ThreadPoolExecutor.
 """
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
-from langchain_core.tools import Tool
 
 from utils.llm import get_llm
 from tools.web_search import web_search
@@ -34,7 +36,7 @@ def researcher_node(state: ResearchState) -> dict:
     """
     Researcher node — gathers information using web search and RAG.
 
-    Calls both tools and compiles the raw research data with source attribution.
+    Calls both tools IN PARALLEL and compiles the raw research data with source attribution.
     """
     query = state.get("research_query", "")
     context = state.get("conversation_context", "")
@@ -42,25 +44,37 @@ def researcher_node(state: ResearchState) -> dict:
 
     logger.info(f"Researcher agent starting for query: {query}")
 
-    # Step 1: Search internal knowledge base
+    # ── Run RAG + Web Search in parallel ──
     rag_results = ""
-    try:
-        rag_results = rag_tool(query)
-        tools_used.append("RAG/KnowledgeBase")
-        logger.info("RAG retrieval completed")
-    except Exception as e:
-        logger.error(f"RAG retrieval failed: {e}")
-        rag_results = "Knowledge base search was unavailable."
-
-    # Step 2: Search the web
     web_results = ""
-    try:
-        web_results = web_search(query)
-        tools_used.append("WebSearch")
-        logger.info("Web search completed")
-    except Exception as e:
-        logger.error(f"Web search failed: {e}")
-        web_results = "Web search was unavailable."
+
+    def _run_rag(q):
+        return rag_tool(q)
+
+    def _run_web(q):
+        return web_search(q)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        future_rag = executor.submit(_run_rag, query)
+        future_web = executor.submit(_run_web, query)
+
+        # Collect RAG results
+        try:
+            rag_results = future_rag.result(timeout=30)
+            tools_used.append("RAG/KnowledgeBase")
+            logger.info("RAG retrieval completed")
+        except Exception as e:
+            logger.error(f"RAG retrieval failed: {e}")
+            rag_results = "Knowledge base search was unavailable."
+
+        # Collect Web results
+        try:
+            web_results = future_web.result(timeout=30)
+            tools_used.append("WebSearch")
+            logger.info("Web search completed")
+        except Exception as e:
+            logger.error(f"Web search failed: {e}")
+            web_results = "Web search was unavailable."
 
     # Step 3: Use LLM to compile and organize findings
     llm = get_llm(temperature=0.3)
