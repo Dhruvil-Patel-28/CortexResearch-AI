@@ -25,7 +25,7 @@ User Query
 └───────────┬───────────┘
             ↓
 ┌───────────────────────┐
-│   ✍️ Writer            │  ← Generates final report
+│   ✍️ Writer           │  ← Generates final report
 │   - Structured JSON   │     - Title, Summary, Findings
 │   - Citations         │     - Analysis, Recommendations
 └───────────┬───────────┘
