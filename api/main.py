@@ -20,7 +20,9 @@ from api.models import (
     HealthResponse,
     SessionHistoryResponse,
 )
+from api.routes import watch as watch_routes
 from agents.research_agent import run_research
+from utils.config import settings
 from utils.memory import session_manager
 
 # Configure logging
@@ -64,14 +66,17 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS middleware for frontend access
+# CORS middleware for the Next.js frontend (origins from settings, no wildcard+credentials mix)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Topic Watch (market pulse) routes
+app.include_router(watch_routes.router)
 
 
 @app.get("/health", response_model=HealthResponse)

@@ -87,3 +87,28 @@ def load_profile(path: str | None = None) -> Profile:
         arxiv_keywords=list(data.get("arxiv_keywords") or []),
         version=sha1(raw).hexdigest()[:12],
     )
+
+
+def save_profile(data: dict, path: str | None = None) -> Profile:
+    """
+    Persist the profile back to YAML and return the reloaded profile.
+
+    Only known keys are written, so the file stays clean and version hash
+    changes only when the meaningful content changes.
+    """
+    p = Path(path or settings.profile_path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+
+    allowed = ("name", "interests", "stack", "goals", "boost", "mute", "arxiv_keywords")
+    clean: dict = {}
+    for key in allowed:
+        value = data.get(key)
+        if key == "name":
+            if value:
+                clean[key] = str(value)
+        elif value:
+            clean[key] = [str(v).strip() for v in value if str(v).strip()]
+
+    p.write_text(yaml.safe_dump(clean, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    return load_profile(str(p))
+
