@@ -1,214 +1,221 @@
-# ==================================================================================================
-# NOTE:
-# This project supports two execution modes:
-#
-# 1. Dynamic Multi-Agent Flow (with Supervisor)
-#    - Flexible and intelligent
-#    - Higher cost and latency
-#
-# 2. Static Pipeline Flow (current active)
-#    - Researcher → Analyzer → Writer
-#    - Optimized for cost and performance
-#
-# The supervisor-based approach is commented out
-# but can be re-enabled for complex queries.
-#===================================================================================================
+"""
+Research pipeline v2 — Planner → Researcher → Writer → Verifier → Reviser.
 
-# Architecture of the dynamic multi-agent flow:
-#     User Query → Supervisor → Researcher → Supervisor → Analyzer → Supervisor → Writer → FINISH
+Each agent does one job and hands structured output to the next, which is what
+makes the report auditable: the plan is explicit, every source has an id, every
+claim cites ids, and the verifier checks those claims against the exact
+evidence before the report is published.
 
-# ==================================================================================================
+`run_research` is the single entry point used by the API, the job runner and the
+CLI. Pass an `emit` callable to stream events (see `agents/jobs.py`).
+"""
 
+from __future__ import annotations
 
-
-import json
-import uuid
 import logging
-from langgraph.graph import StateGraph, END
+import time
+import uuid
+from typing import Any, Callable
 
-from agents.state import ResearchState
-# from agents.supervisor import supervisor_node
+from langgraph.graph import END, StateGraph
+
+from agents.events import emit_event
+from agents.planner import planner_node
 from agents.researcher import researcher_node
-from agents.analyzer import analyzer_node
-from agents.writer import writer_node
+from agents.state import ResearchState
+from agents.verifier import verifier_node
+from agents.writer import reviser_node, writer_node
+from schemas.report import ResearchReportV2, coerce_report
+from utils.cost import CostMeter
 from utils.memory import session_manager
 
 logger = logging.getLogger(__name__)
 
 
-# def route_supervisor(state: ResearchState) -> str:
-#     """
-#     Conditional edge function — routes from Supervisor to the next agent.
-#     Returns the name of the next node to execute based on Supervisor's decision.
-#     """
-#     next_agent = state.get("next_agent", "FINISH")
-
-#     if next_agent == "Researcher":
-#         return "researcher"
-#     elif next_agent == "Analyzer":
-#         return "analyzer"
-#     elif next_agent == "Writer":
-#         return "writer"
-#     else:
-#         return END
-
-def build_static_research_graph() -> StateGraph:
+def build_research_graph() -> StateGraph:
     """
-    Simple deterministic pipeline:
-    Researcher → Analyzer → Writer → END
+    Planner → Researcher → Writer → Verifier → Reviser → END.
 
-    Optimized for low cost and latency.
+    The reviser short-circuits when verification found nothing to repair, so a
+    clean run costs exactly four model calls regardless of report length.
     """
     graph = StateGraph(ResearchState)
 
-    # Add agent nodes
+    graph.add_node("planner", planner_node)
     graph.add_node("researcher", researcher_node)
-    graph.add_node("analyzer", analyzer_node)
     graph.add_node("writer", writer_node)
+    graph.add_node("verifier", verifier_node)
+    graph.add_node("reviser", reviser_node)
 
-    # Entry point
-    graph.set_entry_point("researcher")
-
-    # Linear flow
-    graph.add_edge("researcher", "analyzer")
-    graph.add_edge("analyzer", "writer")
-    graph.add_edge("writer", END)
+    graph.set_entry_point("planner")
+    graph.add_edge("planner", "researcher")
+    graph.add_edge("researcher", "writer")
+    graph.add_edge("writer", "verifier")
+    graph.add_edge("verifier", "reviser")
+    graph.add_edge("reviser", END)
 
     compiled = graph.compile()
-    logger.info("Simple research pipeline compiled")
-
+    logger.info("Deep-research graph compiled (planner → researcher → writer → verifier → reviser)")
     return compiled
 
-#=================================================================================================
-# def build_research_graph() -> StateGraph:
-#     """
-#     Build the multi-agent research pipeline graph.
 
-#     Returns:
-#         Compiled LangGraph StateGraph ready for execution.
-#     """
-#     graph = StateGraph(ResearchState)
-
-#     # Add agent nodes
-#     graph.add_node("supervisor", supervisor_node)
-#     graph.add_node("researcher", researcher_node)
-#     graph.add_node("analyzer", analyzer_node)
-#     graph.add_node("writer", writer_node)
-
-#     # Set entry point
-#     graph.set_entry_point("supervisor")
-
-#     # Supervisor routes conditionally to the next agent
-#     graph.add_conditional_edges(
-#         "supervisor",
-#         route_supervisor,
-#         {
-#             "researcher": "researcher",
-#             "analyzer": "analyzer",
-#             "writer": "writer",
-#             END: END,
-#         },
-#     )
-
-#     # All worker agents route back to supervisor after completion
-#     graph.add_edge("researcher", "supervisor")
-#     graph.add_edge("analyzer", "supervisor")
-#     graph.add_edge("writer", "supervisor")
-
-#     compiled = graph.compile()
-#     logger.info("Research pipeline graph compiled successfully")
-
-#     return compiled
-#==========================================================================================
+research_graph = build_research_graph()
 
 
-# ===== Choose execution mode =====
-
-# research_graph = build_research_graph()  # Dynamic (expensive)
-research_graph = build_static_research_graph()  # Static (optimized)
-
-#==========================================================================================
-
-
-
-def run_research(query: str, session_id: str = None) -> dict:
+def run_research(
+    query: str,
+    session_id: str | None = None,
+    *,
+    depth: str = "standard",
+    item_id: str | None = None,
+    emit: Callable[[str, dict], None] | None = None,
+) -> dict[str, Any]:
     """
-    Execute the full multi-agent research pipeline.
+    Execute the full deep-research pipeline.
 
     Args:
         query: The research question or topic.
-        session_id: Optional session ID for conversation memory.
+        session_id: Optional session id for conversation memory.
+        depth: "brief" | "standard" | "deep" — controls plan size and report length.
+        item_id: Optional market-pulse item this brief was generated from.
+        emit: Optional `emit(event_type, payload)` hook for live streaming.
 
     Returns:
-        Dict containing: report, citations, agent_steps, session_id
+        {session_id, report, citations, agent_steps, verification, cost_usd, model_trace, duration_s}
     """
-    if not session_id:
-        session_id = str(uuid.uuid4())
+    session_id = session_id or str(uuid.uuid4())
+    depth = depth if depth in {"brief", "standard", "deep"} else "standard"
+    meter = CostMeter()
+    started = time.time()
 
-    logger.info(f"Starting research pipeline | session={session_id} | query={query}")
+    logger.info("Research v2 starting | depth=%s | session=%s | query=%s", depth, session_id, query[:120])
+    if emit:
+        emit("run_started", {"type": "run_started", "query": query, "depth": depth, "item_id": item_id})
 
-    # Get conversation context from memory
-    conversation_context = session_manager.get_context(session_id)
-
-    # Initialize the state
-    initial_state = {
+    initial_state: ResearchState = {
         "messages": [],
         "research_query": query,
-        "conversation_context": conversation_context,
+        "depth": depth,
+        "item_id": item_id or "",
+        "conversation_context": session_manager.get_context(session_id),
+        "research_plan": {},
         "research_data": "",
+        "source_registry": [],
+        "sub_findings": [],
+        "report_draft": {},
+        "report": {},
+        "verification": {},
         "analysis": "",
-        "report": "",
         "citations": [],
-        # "next_agent": "",
         "completed_agents": [],
         "agent_steps": [],
         "session_id": session_id,
+        "meter": meter,
+        "emit": emit,
     }
 
     try:
-        # Execute the graph
-        logger.info("Running in SIMPLE PIPELINE mode")
         final_state = research_graph.invoke(initial_state)
-        # can add here recursion limit if looped in future
-
-        # Parse the report
-        report_data = {}
-        if final_state.get("report"):
-            try:
-                report_data = json.loads(final_state["report"])
-            except json.JSONDecodeError:
-                report_data = {
-                    "title": f"Research Report: {query}",
-                    "summary": final_state.get("report", ""),
-                    "key_findings": [],
-                    "detailed_analysis": "",
-                    "recommendations": [],
-                }
-
-        # Store in memory
-        report_summary = report_data.get("summary", "No summary generated.")
-        session_manager.add_interaction(session_id, query, report_summary)
-
-        result = {
-            "session_id": session_id,
-            "report": report_data,
-            "citations": final_state.get("citations", []),
-            "agent_steps": final_state.get("agent_steps", []),
-        }
-        logger.info(f"Research pipeline completed | session={session_id} | steps={len(result['agent_steps'])}")
-        return result
-
-    except Exception as e:
-        logger.error(f"Research pipeline failed: {e}", exc_info=True)
+    except Exception as exc:  # noqa: BLE001 — always return a schema-valid report
+        logger.error("Deep-research pipeline failed: %s", exc, exc_info=True)
+        emit_event(initial_state, "error", message=str(exc), label="Research pipeline failed")
+        report = coerce_report({}, query=query, depth=depth)
+        report.title = f"Research failed: {query[:80]}"
+        report.tldr = ["This run failed before producing findings."]
+        report.risks_and_uncertainty = (
+            f"The pipeline stopped with an error: {exc}. "
+            "Nothing in this report should be treated as a finding — re-run the question."
+        )
+        report.cost_usd = meter.total_usd
+        report.model_trace = meter.trace()
         return {
             "session_id": session_id,
-            "report": {
-                "title": f"Research Report: {query}",
-                "summary": f"An error occurred during research: {str(e)}",
-                "key_findings": ["Research pipeline encountered an error."],
-                "detailed_analysis": f"Error details: {str(e)}",
-                "recommendations": ["Please try again with a different query."],
-            },
+            "report": report.model_dump(),
             "citations": [],
             "agent_steps": [],
+            "verification": {"checked": 0, "supported": 0, "unsupported": 0, "unsupported_claims": [], "notes": "run failed"},
+            "cost_usd": meter.total_usd,
+            "model_trace": meter.trace(),
+            "error": str(exc),
+            "duration_s": round(time.time() - started, 2),
         }
+
+    report = _finalise_report(final_state, query=query, depth=depth, meter=meter, started=started)
+    verification = report.verification.model_dump() if hasattr(report.verification, "model_dump") else dict(final_state.get("verification") or {})
+
+    session_manager.add_interaction(session_id, query, report.executive_summary[:500] or report.title)
+
+    result = {
+        "session_id": session_id,
+        "report": report.model_dump(),
+        "citations": [
+            {
+                "source_name": s.title,
+                "page_number": None,
+                "content_snippet": s.quote,
+                "relevance_score": None,
+                "url": s.url,
+            }
+            for s in report.sources
+        ],
+        "agent_steps": final_state.get("agent_steps", []),
+        "verification": verification,
+        "cost_usd": report.cost_usd,
+        "model_trace": report.model_trace,
+        "duration_s": round(time.time() - started, 2),
+    }
+
+    if emit:
+        emit(
+            "run_completed",
+            {
+                "type": "run_completed",
+                "session_id": session_id,
+                "duration_s": result["duration_s"],
+                "cost_usd": result["cost_usd"],
+                "sources": len(report.sources),
+                "verification": verification,
+                "title": report.title,
+                "reading_time_min": report.reading_time_min,
+            },
+        )
+
+    logger.info(
+        "Research v2 done | %ss | %d sources | %d/%d claims supported | $%.4f",
+        result["duration_s"],
+        len(report.sources),
+        verification.get("supported", 0),
+        verification.get("checked", 0),
+        report.cost_usd,
+    )
+    return result
+
+
+def _finalise_report(
+    final_state: dict[str, Any],
+    *,
+    query: str,
+    depth: str,
+    meter: CostMeter,
+    started: float,
+) -> ResearchReportV2:
+    """Attach pipeline-computed metadata to the finished report."""
+    raw = final_state.get("report") or final_state.get("report_draft") or {}
+    report = coerce_report(raw, query=query, depth=depth, keep_verification=True)
+    report.depth = depth
+    report.cost_usd = meter.total_usd
+    report.model_trace = meter.trace()
+
+    verification = final_state.get("verification") or {}
+    # The reviser is authoritative when it ran: it re-labels each flagged claim as
+    # flagged/softened/removed against the *published* text. Only fall back to the
+    # verifier's raw verdict when the report carries no verification of its own.
+    if verification and not (report.verification.checked or report.verification.unsupported_claims):
+        from schemas.report import Verification
+
+        report.verification = Verification.model_validate(verification)
+    elif report.verification.checked == 0:
+        report.verification.notes = report.verification.notes or "This run completed without a verification pass."
+
+    logger.debug("Report finalised in %.1fs", time.time() - started)
+    return report

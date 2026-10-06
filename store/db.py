@@ -478,3 +478,92 @@ def stats(path: str | None = None) -> dict[str, Any]:
         "bookmarks": bookmarks,
         "last_ingest_at": last_ingest["value"] if last_ingest else None,
     }
+
+
+# ─── Briefs (deep-research reports) ───
+
+
+def _decode_brief(row: sqlite3.Row | dict) -> dict[str, Any]:
+    d = dict(row)
+    d["report"] = json.loads(d.pop("report_json", None) or "{}")
+    d["citations"] = json.loads(d.pop("citations_json", None) or "[]")
+    return d
+
+
+def create_brief(
+    *,
+    query: str,
+    item_id: str | None = None,
+    topic_id: str | None = None,
+    path: str | None = None,
+) -> str:
+    """Register a brief as 'running' so the UI can show it immediately."""
+    brief_id = uuid.uuid4().hex[:12]
+    with closing(connect(path)) as con, con:
+        con.execute(
+            "INSERT INTO briefs (id, item_id, topic_id, query, status, created_at) VALUES (?, ?, ?, ?, 'running', ?)",
+            (brief_id, item_id, topic_id, query, _now()),
+        )
+    return brief_id
+
+
+def finish_brief(
+    brief_id: str,
+    *,
+    report: dict[str, Any],
+    citations: list[dict[str, Any]] | None = None,
+    cost_usd: float = 0.0,
+    status: str = "done",
+    path: str | None = None,
+) -> None:
+    with closing(connect(path)) as con, con:
+        con.execute(
+            """UPDATE briefs
+                  SET status = ?, report_json = ?, citations_json = ?, cost_usd = ?, finished_at = ?
+                WHERE id = ?""",
+            (
+                status,
+                json.dumps(report, ensure_ascii=False, default=str),
+                json.dumps(citations or [], ensure_ascii=False, default=str),
+                cost_usd,
+                _now(),
+                brief_id,
+            ),
+        )
+
+
+def get_brief(brief_id: str, path: str | None = None) -> dict[str, Any] | None:
+    with closing(connect(path)) as con:
+        row = con.execute("SELECT * FROM briefs WHERE id = ?", (brief_id,)).fetchone()
+    return _decode_brief(row) if row else None
+
+
+def list_briefs(
+    *,
+    limit: int = 50,
+    item_id: str | None = None,
+    status: str | None = None,
+    path: str | None = None,
+) -> list[dict[str, Any]]:
+    """Newest-first brief list (report payload included — reports are small)."""
+    clauses: list[str] = []
+    params: list[Any] = []
+    if item_id:
+        clauses.append("item_id = ?")
+        params.append(item_id)
+    if status:
+        clauses.append("status = ?")
+        params.append(status)
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    params.append(limit)
+    with closing(connect(path)) as con:
+        rows = con.execute(
+            f"SELECT * FROM briefs {where} ORDER BY created_at DESC LIMIT ?", params
+        ).fetchall()
+    return [_decode_brief(r) for r in rows]
+
+
+def delete_brief(brief_id: str, path: str | None = None) -> None:
+    with closing(connect(path)) as con, con:
+        con.execute("DELETE FROM briefs WHERE id = ?", (brief_id,))
+

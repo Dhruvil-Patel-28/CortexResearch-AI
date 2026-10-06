@@ -20,8 +20,11 @@ from api.models import (
     HealthResponse,
     SessionHistoryResponse,
 )
+from api.routes import research as research_routes
 from api.routes import watch as watch_routes
 from agents.research_agent import run_research
+from reports.markdown import render_markdown
+from schemas.report import ResearchReportV2
 from utils.config import settings
 from utils.memory import session_manager
 
@@ -78,6 +81,9 @@ app.add_middleware(
 # Topic Watch (market pulse) routes
 app.include_router(watch_routes.router)
 
+# Deep-research routes (jobs + SSE streaming + report library)
+app.include_router(research_routes.router)
+
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
@@ -88,10 +94,12 @@ async def health_check():
 @app.post("/research", response_model=ResearchResponse)
 async def research(request: ResearchRequest):
     """
-    Execute a full multi-agent research pipeline.
+    Execute the deep-research pipeline synchronously.
 
-    The pipeline follows: Supervisor → Researcher → Analyzer → Writer
-    Returns a structured research report with citations and execution trace.
+    Pipeline: Planner → Researcher → Writer → Verifier → Reviser.
+    For live streaming use `POST /research/start` + `GET /research/jobs/{id}/stream`.
+    The response keeps the legacy report shape for compatibility; the full
+    Report-Schema-v2 payload is available from `/research/reports/{brief_id}`.
     """
     if not request.query.strip():
         raise HTTPException(status_code=400, detail="Query cannot be empty.")
@@ -106,16 +114,23 @@ async def research(request: ResearchRequest):
             request.session_id,
         )
 
-        # Build typed response from raw dict
+        # Build typed response from the schema-v2 report
         report_data = result.get("report", {})
+        try:
+            report_v2 = ResearchReportV2.model_validate(report_data)
+            detailed = render_markdown(report_v2)
+        except Exception:  # noqa: BLE001 — legacy clients must never see a 500
+            report_v2 = None
+            detailed = report_data.get("technical_explainer", "")
+
         response = ResearchResponse(
             session_id=result["session_id"],
             report=ResearchReport(
                 title=report_data.get("title", "Untitled Report"),
-                summary=report_data.get("summary", ""),
-                key_findings=report_data.get("key_findings", []),
-                detailed_analysis=report_data.get("detailed_analysis", ""),
-                recommendations=report_data.get("recommendations", []),
+                summary=report_data.get("executive_summary", ""),
+                key_findings=report_data.get("tldr", []),
+                detailed_analysis=detailed,
+                recommendations=report_data.get("what_to_watch_next", []),
             ),
             citations=[
                 Citation(
@@ -137,7 +152,10 @@ async def research(request: ResearchRequest):
             timestamp=datetime.now(),
         )
 
-        logger.info(f"Research completed | session={result['session_id']} | citations={len(response.citations)}")
+        logger.info(
+            f"Research completed | session={result['session_id']} | "
+            f"citations={len(response.citations)} | cost=${result.get('cost_usd', 0):.4f}"
+        )
         return response
 
     except Exception as e:

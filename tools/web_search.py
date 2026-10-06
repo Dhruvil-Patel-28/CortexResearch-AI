@@ -1,44 +1,82 @@
 """
 Web search tool using DuckDuckGo.
-Returns structured results with source attribution.
+
+Two entry points:
+- `web_search(query) -> str`      : formatted text, for prompt-based callers
+- `web_search_results(query) -> list[dict]` : structured hits with URL, so the
+  researcher can register real citations instead of parsing strings.
+
+Both are resilient: rate limits retry once, then degrade to an empty result.
 """
 
 import logging
+import time
+
 from ddgs import DDGS
 
 logger = logging.getLogger(__name__)
 
+_MAX_RESULTS = 5
+
+
+def web_search_results(query: str, max_results: int = _MAX_RESULTS) -> list[dict]:
+    """
+    Search the web and return structured results.
+
+    Returns:
+        [{"title", "url", "snippet", "source"}] — empty on failure.
+    """
+    for attempt in (1, 2):
+        try:
+            results: list[dict] = []
+            for r in DDGS().text(query, max_results=max_results):
+                url = (r.get("href") or "").strip()
+                title = (r.get("title") or "").strip()
+                if not url and not title:
+                    continue
+                results.append(
+                    {
+                        "title": title or url,
+                        "url": url,
+                        "snippet": (r.get("body") or "").strip(),
+                        "source": _domain(url),
+                    }
+                )
+            if results:
+                logger.info("Web search '%s' → %d results", query[:60], len(results))
+                return results
+
+            logger.info("Web search '%s' returned nothing", query[:60])
+            return []
+        except Exception as e:  # noqa: BLE001 — ddgs raises several lib-specific errors
+            message = str(e).lower()
+            if attempt == 1 and ("rate" in message or "limit" in message or "429" in message):
+                logger.warning("Web search rate-limited, retrying once: %s", e)
+                time.sleep(1.5)
+                continue
+            logger.error("Web search failed for '%s': %s", query, e)
+            return []
+    return []
+
+
+def _domain(url: str) -> str:
+    if not url:
+        return ""
+    host = url.split("://", 1)[-1].split("/", 1)[0]
+    return host[4:] if host.startswith("www.") else host
+
 
 def web_search(query: str) -> str:
     """
-    Search the web for real-time information using DuckDuckGo.
+    Search the web for real-time information and return formatted text.
 
-    Args:
-        query: The search query string.
-
-    Returns:
-        Formatted string with search results including source URLs and titles.
+    Kept for prompt-based callers; the researcher uses `web_search_results`.
     """
-    try:
-        results = []
-        ddgs = DDGS()
-        for r in ddgs.text(query, max_results=5):
-            source_title = r.get("title", "Unknown Source")
-            source_url = r.get("href", "No URL")
-            body = r.get("body", "")
-            results.append(
-                f"[Source: {source_title}]\n"
-                f"URL: {source_url}\n"
-                f"{body}"
-            )
+    results = web_search_results(query)
+    if not results:
+        return "No results found for this search query."
 
-        if not results:
-            logger.warning(f"No web search results found for: {query}")
-            return "No results found for this search query."
-
-        logger.info(f"Web search returned {len(results)} results for: {query}")
-        return "\n\n---\n\n".join(results)
-
-    except Exception as e:
-        logger.error(f"Web search failed for '{query}': {e}")
-        return f"Web search encountered an error: {str(e)}. Please try a different query."
+    blocks = [
+        f"[Source: {r['title']}]\nURL: {r['url']}\n{r['snippet']}" for r in results
+    ]
+    return "\n\n---\n\n".join(blocks)

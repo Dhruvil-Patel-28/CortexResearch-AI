@@ -1,53 +1,61 @@
 """
 RAG retrieval tool with citation tracking and relevance filtering.
-Searches the internal knowledge base and returns only results that meet
-the similarity threshold, preventing irrelevant citations.
+
+- `rag_results(query) -> list[dict]` : structured, threshold-filtered hits
+- `rag_tool(query) -> str`           : formatted text for prompt-based callers
+
+Only documents above the configured similarity threshold are returned, which is
+what keeps irrelevant citations out of the final report.
 """
 
 import logging
-from rag.vector_store import search_with_relevance
 
 logger = logging.getLogger(__name__)
 
 
-def rag_tool(query: str) -> str:
+def rag_results(query: str, k: int | None = None) -> list[dict]:
     """
-    Retrieve relevant information from the internal document knowledge base.
-
-    Uses similarity-score filtering to ensure only genuinely relevant documents
-    are returned. Results include source attribution with document name,
-    page number, relevance score, and content for citation tracking.
-
-    Args:
-        query: The search query to find relevant documents.
+    Retrieve relevant chunks from the internal knowledge base.
 
     Returns:
-        Formatted string with retrieved content and source metadata,
-        or a message indicating no relevant documents were found.
+        [{"title", "url", "snippet", "score"}] — empty when nothing clears the
+        relevance threshold or the index is unavailable.
     """
     try:
-        results = search_with_relevance(query)
+        from rag.vector_store import search_with_relevance
 
+        results = search_with_relevance(query, k=k) if k else search_with_relevance(query)
         if not results:
-            logger.info(f"No relevant documents above threshold for: {query}")
-            return "No relevant documents found in the knowledge base for this query."
+            logger.info("No knowledge-base documents above threshold for: %s", query[:60])
+            return []
 
-        formatted = []
-        for i, (doc, score) in enumerate(results, 1):
-            source_file = doc.metadata.get("source_file", doc.metadata.get("source", "Unknown"))
-            page_num = doc.metadata.get("page", "N/A")
-
-            formatted.append(
-                f"[Document {i}]\n"
-                f"Source: {source_file}\n"
-                f"Page: {page_num}\n"
-                f"Relevance Score: {score:.4f}\n"
-                f"Content:\n{doc.page_content}"
+        hits: list[dict] = []
+        for doc, score in results:
+            meta = doc.metadata or {}
+            source = meta.get("source_file") or meta.get("source") or "Knowledge base"
+            page = meta.get("page")
+            hits.append(
+                {
+                    "title": f"{source}" + (f" (p. {page})" if page not in (None, "N/A") else ""),
+                    "url": str(meta.get("url") or ""),
+                    "snippet": (doc.page_content or "").strip(),
+                    "score": float(score),
+                }
             )
+        logger.info("Knowledge base returned %d chunks for: %s", len(hits), query[:60])
+        return hits
+    except Exception as e:  # noqa: BLE001 — index missing/corrupt must not kill a run
+        logger.warning("Knowledge base retrieval unavailable for '%s': %s", query[:60], e)
+        return []
 
-        logger.info(f"RAG retrieved {len(results)} relevant documents for: {query}")
-        return "\n\n---\n\n".join(formatted)
 
-    except Exception as e:
-        logger.error(f"RAG retrieval failed for '{query}': {e}")
-        return f"Knowledge base search encountered an error: {str(e)}"
+def rag_tool(query: str) -> str:
+    """Formatted knowledge-base output (kept for prompt-based callers)."""
+    hits = rag_results(query)
+    if not hits:
+        return "No relevant documents found in the knowledge base for this query."
+    blocks = [
+        f"[Document {i}]\nSource: {h['title']}\nRelevance Score: {h['score']:.4f}\nContent:\n{h['snippet']}"
+        for i, h in enumerate(hits, 1)
+    ]
+    return "\n\n---\n\n".join(blocks)
