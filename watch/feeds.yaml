@@ -1,0 +1,32 @@
+# Free RSS/Atom feeds for the Topic Watch radar.
+# Add or remove freely — each feed fails in isolation, so a dead URL
+# never breaks an ingest run. The commented entries are popular extras
+# you can enable by uncommenting.
+
+feeds:
+  - name: Hacker News Front Page
+    url: https://news.ycombinator.com/rss
+  - name: Hugging Face Blog
+    url: https://huggingface.co/blog/feed.xml
+  - name: Simon Willison
+    url: https://simonwillison.net/atom/everything/
+  - name: Latent Space
+    url: https://www.latent.space/feed
+  - name: Import AI
+    url: https://importai.substack.com/feed
+  - name: TechCrunch AI
+    url: https://techcrunch.com/category/artificial-intelligence/feed/
+  - name: The Verge AI
+    url: https://www.theverge.com/rss/ai-artificial-intelligence/index.xml
+  - name: VentureBeat AI
+    url: https://venturebeat.com/category/ai/feed/
+  - name: MIT Technology Review AI
+    url: https://www.technologyreview.com/topic/artificial-intelligence/feed
+  - name: OpenAI News
+    url: https://openai.com/news/rss.xml
+  # - name: Google DeepMind Blog
+  #   url: https://deepmind.google/blog/rss.xml
+  # - name: Ars Technica
+  #   url: https://feeds.arstechnica.com/arstechnica/index
+  # - name: GitHub Blog
+  #   url: https://github.blog/feed/
