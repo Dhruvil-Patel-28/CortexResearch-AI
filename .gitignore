@@ -168,3 +168,20 @@ oper/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# --- Node / Next.js (web/) ---
+web/node_modules/
+web/.next/
+web/out/
+web/build/
+web/.env*.local
+web/.vercel/
+web/npm-debug.log*
+web/yarn-debug.log*
+web/yarn-error.log*
+web/.turbo/
+
+# --- Cortex runtime data ---
+data/cortex.db
+data/cortex.db-*
+watch/feeds.local.yaml
