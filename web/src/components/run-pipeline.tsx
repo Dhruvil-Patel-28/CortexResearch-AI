@@ -9,7 +9,7 @@
  * claim-level verification result.
  */
 
-import { Check, Circle, Loader2, Radio, Search, ShieldCheck, TriangleAlert } from "lucide-react";
+import { Check, Circle, Loader2, Network, Radio, Search, ShieldCheck, TriangleAlert } from "lucide-react";
 import type { ReportSource, RunEvent, Verification } from "@/lib/types";
 import { cn, hostOf } from "@/lib/utils";
 
@@ -18,7 +18,34 @@ interface Step {
   label: string;
   detail?: string;
   items?: string[];
+  lanes?: Lane[];
   state: "pending" | "active" | "done" | "failed";
+}
+
+/** Live progress of one parallel sub-question retrieval thread. */
+interface Lane {
+  index: number;
+  question: string;
+  done: number;
+  tasks: number;
+  /** Retrieval channel of the most recently finished task ("store"|"rag"|"web"). */
+  lastKind?: string;
+}
+
+/** Fold every `subq` event into the latest state per sub-question. */
+function subqLanes(events: RunEvent[]): Lane[] {
+  const byIndex = new Map<number, Lane>();
+  for (const e of events) {
+    if (e.type !== "subq" || typeof e.index !== "number") continue;
+    byIndex.set(e.index, {
+      index: e.index,
+      question: e.question ?? "",
+      done: e.done ?? 0,
+      tasks: e.tasks ?? 0,
+      lastKind: e.kind ?? byIndex.get(e.index)?.lastKind,
+    });
+  }
+  return [...byIndex.values()].sort((a, b) => a.index - b.index);
 }
 
 const STAGE_LABELS: Record<string, string> = {
@@ -70,6 +97,7 @@ function buildSteps(events: RunEvent[], phase: string): Step[] {
   };
 
   const subQuestions = plan?.plan?.sub_questions ?? [];
+  const lanes = subqLanes(events);
 
   return [
     {
@@ -86,6 +114,7 @@ function buildSteps(events: RunEvent[], phase: string): Step[] {
         ? `${tools.radar_store ?? 0} radar items · ${tools.knowledge_base ?? 0} knowledge-base chunks · ${tools.web_search ?? 0} web hits`
         : gathering?.label ??
           (currentStage === "gathering" ? "Running parallel retrieval threads…" : undefined),
+      lanes: lanes.length > 0 ? lanes : undefined,
       state: stateFor(1, tools),
     },
     {
@@ -122,10 +151,205 @@ function StepIcon({ state }: { state: Step["state"] }) {
   return <Circle className="size-3 text-line-strong" />;
 }
 
+/** Source channels the researcher fans out to, in graph bottom-row order. */
+const GRAPH_CHANNELS = [
+  { key: "store", label: "Radar store", countKey: "radar_store", x: 20 },
+  { key: "rag", label: "Knowledge base", countKey: "knowledge_base", x: 50 },
+  { key: "web", label: "Web search", countKey: "web_search", x: 80 },
+] as const;
+
+/**
+ * Live retrieval graph: planner node fanning out to one node per
+ * sub-question, each reaching down to the three source channels. Edges flow
+ * (animated dashes) while that thread is still working, so the parallel
+ * fan-out is something you watch, not something you are told about.
+ */
+function ResearchGraph({ lanes, tools, live }: { lanes: Lane[]; tools?: RunEvent; live: boolean }) {
+  if (lanes.length === 0) return null;
+
+  const n = lanes.length;
+  const subqX = (i: number) => ((i + 1) * 100) / (n + 1);
+  const PLANNER = { x: 50, y: 7 };
+  const SQ_Y = 26;
+  const CH_Y = 45;
+  const R = 2.2;
+
+  const channelCounts = Object.fromEntries(
+    GRAPH_CHANNELS.map((c) => {
+      const v = tools?.[c.countKey];
+      return [c.key, typeof v === "number" ? v : null];
+    }),
+  ) as Record<string, number | null>;
+  const gatheringDone = GRAPH_CHANNELS.every((c) => channelCounts[c.key] !== null);
+
+  const laneActive = (lane: Lane) => live && lane.done < lane.tasks;
+  const channelHot = (key: string) =>
+    live && !gatheringDone && lanes.some((l) => l.done < l.tasks && l.lastKind === key);
+
+  const plannerColor = "var(--color-positive)";
+  const sqColor = (lane: Lane) =>
+    lane.done >= lane.tasks
+      ? "var(--color-positive)"
+      : laneActive(lane)
+        ? "var(--color-accent-soft)"
+        : "var(--color-ink-faint)";
+
+  return (
+    <svg
+      viewBox="0 0 100 54"
+      className="mt-2.5 w-full"
+      role="img"
+      aria-label="Live retrieval graph: planner fanning out to sub-questions and source channels"
+    >
+      {/* planner → sub-question edges */}
+      {lanes.map((lane) => {
+        const x = subqX(lanes.indexOf(lane));
+        const active = laneActive(lane);
+        return (
+          <line
+            key={`p${lane.index}`}
+            x1={PLANNER.x}
+            y1={PLANNER.y + R}
+            x2={x}
+            y2={SQ_Y - R}
+            stroke={active ? "var(--color-accent-soft)" : "var(--color-line-strong)"}
+            strokeWidth={active ? 0.45 : 0.3}
+            className={active ? "edge-flow" : undefined}
+            opacity={active ? 0.9 : 0.5}
+          />
+        );
+      })}
+
+      {/* sub-question → channel edges */}
+      {lanes.map((lane) =>
+        GRAPH_CHANNELS.map((ch) => {
+          const x = subqX(lanes.indexOf(lane));
+          const hot = channelHot(ch.key);
+          return (
+            <line
+              key={`s${lane.index}-${ch.key}`}
+              x1={x}
+              y1={SQ_Y + R}
+              x2={ch.x}
+              y2={CH_Y - 3}
+              stroke={hot ? "var(--color-accent-soft)" : "var(--color-line-strong)"}
+              strokeWidth={hot ? 0.4 : 0.22}
+              className={hot ? "edge-flow" : undefined}
+              opacity={hot ? 0.85 : lane.done >= lane.tasks ? 0.35 : 0.15}
+            />
+          );
+        }),
+      )}
+
+      {/* planner node */}
+      <circle cx={PLANNER.x} cy={PLANNER.y} r={R} fill="var(--color-surface-3)" stroke={plannerColor} strokeWidth={0.4} />
+      <path
+        d={`M ${PLANNER.x - 0.9} ${PLANNER.y} l 0.6 0.7 l 1.2 -1.4`}
+        fill="none"
+        stroke={plannerColor}
+        strokeWidth={0.35}
+        strokeLinecap="round"
+      />
+      <text x={PLANNER.x} y={PLANNER.y - R - 1} textAnchor="middle" fontSize={2.4} fill="var(--color-ink-soft)">
+        Planner
+      </text>
+
+      {/* sub-question nodes */}
+      {lanes.map((lane) => {
+        const x = subqX(lanes.indexOf(lane));
+        const active = laneActive(lane);
+        const done = lane.done >= lane.tasks;
+        return (
+          <g key={`sq${lane.index}`}>
+            {active && (
+              <circle cx={x} cy={SQ_Y} r={R + 1.1} fill="none" stroke="var(--color-accent-soft)" strokeWidth={0.25} className="node-pulse" />
+            )}
+            <circle cx={x} cy={SQ_Y} r={R} fill="var(--color-surface-3)" stroke={sqColor(lane)} strokeWidth={0.4} />
+            <text x={x} y={SQ_Y - R - 1.1} textAnchor="middle" fontSize={2.2} fill={done ? "var(--color-positive)" : "var(--color-ink-soft)"}>
+              SQ{lane.index + 1}
+            </text>
+            <text x={x} y={SQ_Y + R + 2.8} textAnchor="middle" fontSize={2} className="font-mono" fill={done ? "var(--color-positive)" : "var(--color-ink-faint)"}>
+              {lane.done}/{lane.tasks}
+            </text>
+            <title>{lane.question}</title>
+          </g>
+        );
+      })}
+
+      {/* channel nodes */}
+      {GRAPH_CHANNELS.map((ch) => {
+        const hot = channelHot(ch.key);
+        const count = channelCounts[ch.key];
+        const complete = count !== null;
+        return (
+          <g key={ch.key}>
+            <rect
+              x={ch.x - 11}
+              y={CH_Y - 3}
+              width={22}
+              height={6}
+              rx={1.6}
+              fill="var(--color-surface-3)"
+              stroke={hot ? "var(--color-accent-soft)" : complete ? "var(--color-positive)" : "var(--color-line-strong)"}
+              strokeWidth={hot ? 0.4 : 0.3}
+              className={hot ? "node-pulse" : undefined}
+            />
+            <text x={ch.x} y={CH_Y - 0.4} textAnchor="middle" fontSize={2.2} fill={complete ? "var(--color-ink)" : "var(--color-ink-soft)"}>
+              {ch.label}
+            </text>
+            <text x={ch.x} y={CH_Y + 2.4} textAnchor="middle" fontSize={1.9} className="font-mono" fill={complete ? "var(--color-positive)" : "var(--color-ink-faint)"}>
+              {complete ? `${count} hits` : "searching…"}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function LaneRow({ lane, running }: { lane: Lane; running: boolean }) {
+  const complete = lane.done >= lane.tasks;
+  const pct = Math.round((lane.done / Math.max(lane.tasks, 1)) * 100);
+  return (
+    <div className="flex items-center gap-2">
+      {complete ? (
+        <Check className="size-3 shrink-0 text-positive" />
+      ) : running ? (
+        <Loader2 className="size-3 shrink-0 animate-spin text-accent-soft" />
+      ) : (
+        <Circle className="size-3 shrink-0 text-line-strong" />
+      )}
+      <span
+        className={cn(
+          "min-w-0 flex-1 truncate text-xs",
+          complete ? "text-ink-soft" : "text-ink",
+        )}
+        title={lane.question}
+      >
+        {lane.question}
+      </span>
+      <span className="h-1 w-16 shrink-0 overflow-hidden rounded-full bg-line">
+        <span
+          className={cn(
+            "block h-full rounded-full transition-all duration-500",
+            complete ? "bg-positive/70" : "bg-accent-soft",
+          )}
+          style={{ width: `${pct}%` }}
+        />
+      </span>
+      <span className="w-8 shrink-0 text-right font-mono text-[10px] text-ink-faint">
+        {lane.done}/{lane.tasks}
+      </span>
+    </div>
+  );
+}
+
 export function RunPipeline({ events, phase }: { events: RunEvent[]; phase: string }) {
   const steps = buildSteps(events, phase);
   const plan = lastEvent(events, "plan");
   const verification = lastEvent(events, "verification")?.verification as Verification | undefined;
+  const live = phase === "live" || phase === "connecting";
+  const toolsEvent = lastEvent(events, "tools");
 
   return (
     <div className="flex flex-col gap-4">
@@ -166,6 +390,18 @@ export function RunPipeline({ events, phase }: { events: RunEvent[]; phase: stri
                       </li>
                     ))}
                   </ul>
+                )}
+                {step.lanes && step.lanes.length > 0 && (
+                  <div className="mt-2.5 flex flex-col gap-1.5 rounded-lg border border-line bg-surface-2/60 p-2.5">
+                    <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-ink-faint">
+                      <Network className="size-3" />
+                      {live && step.state === "active" ? "Live retrieval graph" : "Retrieval graph"}
+                    </p>
+                    <ResearchGraph lanes={step.lanes} tools={toolsEvent} live={live} />
+                    {step.lanes.map((lane) => (
+                      <LaneRow key={lane.index} lane={lane} running={step.state === "active"} />
+                    ))}
+                  </div>
                 )}
               </div>
             </li>

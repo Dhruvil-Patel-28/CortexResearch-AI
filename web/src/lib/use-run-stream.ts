@@ -22,6 +22,7 @@ const EVENT_TYPES = [
   "run_started",
   "stage",
   "plan",
+  "subq",
   "tools",
   "sources",
   "verification",

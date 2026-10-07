@@ -201,6 +201,33 @@ body {
   }
 }
 
+/* ── Live retrieval graph ────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes edge-flow {
+    to {
+      stroke-dashoffset: -12;
+    }
+  }
+  .edge-flow {
+    stroke-dasharray: 3 3;
+    animation: edge-flow 0.9s linear infinite;
+  }
+
+  @keyframes node-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.4;
+    }
+  }
+  .node-pulse {
+    animation: node-pulse 1.2s ease-in-out infinite;
+  }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .rise-in {
     animation: rise-in 460ms cubic-bezier(0.22, 1, 0.36, 1) both;

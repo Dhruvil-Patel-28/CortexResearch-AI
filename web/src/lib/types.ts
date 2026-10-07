@@ -230,6 +230,14 @@ export interface RunEvent {
     sub_questions?: { question: string; why?: string; search_queries?: string[] }[];
   };
   sources?: ReportSource[];
+  /** `subq` event payload (per-sub-question parallel retrieval progress). */
+  index?: number;
+  total?: number;
+  question?: string;
+  done?: number;
+  tasks?: number;
+  /** Which retrieval channel just finished a task for this sub-question. */
+  kind?: string;
   verification?: Verification;
   report?: Report;
   brief_id?: string | null;

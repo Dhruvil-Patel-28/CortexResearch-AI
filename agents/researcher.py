@@ -120,9 +120,21 @@ def researcher_node(state: ResearchState) -> dict:
     done_per_sq: dict[int, int] = {idx: 0 for idx in tasks_per_sq}
     n_sq = len(sub_questions)
 
-    # Threads run the sub-questions *in parallel*; as each sub-question's
-    # retrieval tasks finish we emit a progress event so the live run view
-    # shows movement instead of a silent planner screen.
+    # Seed one lane per sub-question so the live view shows the parallel
+    # fan-out immediately, before any task has finished.
+    for idx, sq in enumerate(sub_questions):
+        emit_event(
+            state,
+            "subq",
+            index=idx,
+            total=n_sq,
+            question=(sq.get("question") or query)[:80],
+            done=0,
+            tasks=tasks_per_sq.get(idx, 1),
+        )
+
+    # Threads run the sub-questions *in parallel*; every completed task
+    # updates its sub-question's lane so users watch the threads race.
     with ThreadPoolExecutor(max_workers=6) as executor:
         futures = {executor.submit(_run_task, kind, q): (idx, kind, q) for idx, kind, q in tasks}
         for future in as_completed(futures):
@@ -133,13 +145,23 @@ def researcher_node(state: ResearchState) -> dict:
                 logger.warning("task failed/timed out %s: %s", key[1], e)
                 results[key] = []
             done_per_sq[key[0]] = done_per_sq.get(key[0], 0) + 1
+            sq_question = (sub_questions[key[0]].get("question") or query)[:80]
+            emit_event(
+                state,
+                "subq",
+                index=key[0],
+                total=n_sq,
+                question=sq_question,
+                done=done_per_sq[key[0]],
+                tasks=tasks_per_sq.get(key[0], 1),
+                kind=key[1],
+            )
             if done_per_sq[key[0]] == tasks_per_sq.get(key[0], 1):
-                sq_question = (sub_questions[key[0]].get("question") or query)[:60]
                 emit_event(
                     state,
                     "stage",
                     stage="gathering",
-                    label=f"Sub-question {key[0] + 1}/{n_sq} searched — {sq_question}",
+                    label=f"Sub-question {key[0] + 1}/{n_sq} searched — {sq_question[:60]}",
                     pct=15 + int(14 * sum(done_per_sq.values()) / max(len(tasks), 1)),
                 )
 

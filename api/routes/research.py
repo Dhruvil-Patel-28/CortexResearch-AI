@@ -208,7 +208,14 @@ async def stream_run(job_id: str, replay: bool = Query(default=True)):
     return StreamingResponse(
         event_stream(),
         media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
+        headers={
+            # `no-transform` stops downstream compression (Next.js gzip) from
+            # buffering the stream — compressed SSE only flushes when the run
+            # ends, so a live run would render nothing until it finished.
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
     )
 
 
