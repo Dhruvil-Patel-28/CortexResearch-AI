@@ -22,6 +22,7 @@ from api.models import (
 )
 from api.routes import digests as digests_routes
 from api.routes import research as research_routes
+from api.routes import search as search_routes
 from api.routes import watch as watch_routes
 from agents.research_agent import run_research
 from reports.markdown import render_markdown
@@ -88,6 +89,9 @@ app.include_router(research_routes.router)
 
 # Digest routes (history, preview, manual run, delta briefs)
 app.include_router(digests_routes.router)
+
+# Library search (hybrid retrieval over items + reports; optional GraphRAG/memory)
+app.include_router(search_routes.router)
 
 
 @app.get("/health", response_model=HealthResponse)

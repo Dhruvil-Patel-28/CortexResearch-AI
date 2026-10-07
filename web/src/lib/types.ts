@@ -285,3 +285,37 @@ export interface DeltaStarted {
   brief_id: string;
   query: string;
 }
+
+/* ── Library search (/search) ── */
+
+export interface SearchHit {
+  ref_id: string;
+  kind: "item" | "brief" | string;
+  title: string;
+  url: string;
+  snippet: string;
+  source: string;
+  published_at: string;
+  score: number;
+  relevance: number | null;
+  brief_id: string | null;
+}
+
+export interface GraphAnswer {
+  available: boolean;
+  answer: string;
+  reason: string;
+}
+
+export interface MemoryHit {
+  text: string;
+  score: number;
+}
+
+export interface SearchResponse {
+  query: string;
+  results: SearchHit[];
+  graph: GraphAnswer | null;
+  memory: MemoryHit[];
+  flags: { graph_rag: boolean; supermemory: boolean };
+}

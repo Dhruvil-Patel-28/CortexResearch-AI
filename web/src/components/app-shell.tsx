@@ -10,6 +10,7 @@ const NAV = [
   { href: "/research", label: "Research", hint: "Ask anything" },
   { href: "/reports", label: "Reports", hint: "Saved deep briefs" },
   { href: "/digests", label: "Digests", hint: "Daily briefs" },
+  { href: "/library", label: "Library", hint: "Search everything saved" },
   { href: "/topics", label: "Interests", hint: "Your profile" },
 ];
 

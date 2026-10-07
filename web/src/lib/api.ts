@@ -21,6 +21,7 @@ import type {
   ReportSummary,
   RunSnapshot,
   RunStarted,
+  SearchResponse,
   Stats,
 } from "./types";
 
@@ -145,4 +146,12 @@ export const digestsApi = {
       method: "POST",
       body: JSON.stringify({ topic, since: since ?? null }),
     }),
+};
+
+/* Library search — hybrid retrieval over items + reports. */
+export const searchApi = {
+  search: (q: string, params: { k?: number; kind?: "item" | "brief" } = {}) =>
+    request<SearchResponse>(
+      `/search${query({ q, ...params } as Record<string, unknown>)}`,
+    ),
 };

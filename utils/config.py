@@ -31,6 +31,13 @@ class Settings(BaseSettings):
     rag_rerank: bool = Field(default=True, description="Rerank fused retrieval candidates with a cross-encoder")
     rag_rerank_model: str = Field(default="cross-encoder/ms-marco-MiniLM-L-6-v2", description="Cross-encoder rerank model")
 
+    # Optional retrieval/memory upgrades — all degrade gracefully when off.
+    enable_graph_rag: bool = Field(default=False, description="Enable LightRAG knowledge-graph retrieval (requires lightrag-hku)")
+    graph_working_dir: str = Field(default="data/graphrag", description="LightRAG storage directory")
+    enable_supermemory: bool = Field(default=False, description="Enable the local Supermemory memory service")
+    supermemory_url: str = Field(default="", description="Base URL of the local Supermemory service")
+    supermemory_api_key: str = Field(default="", description="Optional API key for Supermemory")
+
     # API Configuration
     api_host: str = Field(default="0.0.0.0", description="FastAPI host")
     api_port: int = Field(default=8000, description="FastAPI port")
