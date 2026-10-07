@@ -125,9 +125,15 @@ def start_research_job(
     topic_id: str | None = None,
     session_id: str | None = None,
     persist_brief: bool = True,
+    kind: str = "research",
 ) -> dict[str, str]:
     """
     Start a deep-research run in the background.
+
+    Args:
+        kind: "research" for free-form questions, "delta" for topic delta
+              briefs, "brief" for item briefs — recorded on the job row so the
+              UI can label the run.
 
     Returns:
         {"job_id", "brief_id"} — the brief id is where the finished report lands.
@@ -135,11 +141,11 @@ def start_research_job(
     query = query.strip()
     brief_id = store.create_brief(query=query, item_id=item_id, topic_id=topic_id) if persist_brief else None
     job_id = store.create_job(
-        "research",
+        kind,
         {"query": query, "depth": depth, "item_id": item_id, "brief_id": brief_id, "session_id": session_id},
     )
 
-    run = RunStream(job_id=job_id, kind="research", brief_id=brief_id)
+    run = RunStream(job_id=job_id, kind=kind, brief_id=brief_id)
     _register(run)
     run.emit("queued", {"label": "Queued", "pct": 0})
 

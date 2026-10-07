@@ -443,6 +443,27 @@ def get_job(job_id: str, path: str | None = None) -> dict[str, Any] | None:
     return d
 
 
+def list_jobs(*, kind: str | None = None, limit: int = 30, path: str | None = None) -> list[dict[str, Any]]:
+    """Job history, newest first — includes scheduler cycles."""
+    clauses, params = [], []
+    if kind:
+        clauses.append("kind = ?")
+        params.append(kind)
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    params.append(limit)
+    with closing(connect(path)) as con:
+        rows = con.execute(
+            f"SELECT * FROM jobs {where} ORDER BY created_at DESC LIMIT ?", params
+        ).fetchall()
+    out = []
+    for row in rows:
+        d = dict(row)
+        d["payload"] = json.loads(d.pop("payload_json") or "{}")
+        d["progress"] = json.loads(d.pop("progress_json") or "{}")
+        out.append(d)
+    return out
+
+
 # ─── Meta ───
 
 
@@ -566,4 +587,69 @@ def list_briefs(
 def delete_brief(brief_id: str, path: str | None = None) -> None:
     with closing(connect(path)) as con, con:
         con.execute("DELETE FROM briefs WHERE id = ?", (brief_id,))
+
+
+# ─── Digests ───
+
+
+def _decode_digest(row: sqlite3.Row | dict) -> dict[str, Any]:
+    d = dict(row)
+    d["item_ids"] = json.loads(d.pop("item_ids_json", None) or "[]")
+    d["delivered"] = json.loads(d.pop("delivered_json", None) or "[]")
+    return d
+
+
+def create_digest(
+    *,
+    rendered_md: str,
+    item_ids: list[str],
+    delivered: list[str] | None = None,
+    created_at: str | None = None,
+    path: str | None = None,
+) -> str:
+    digest_id = uuid.uuid4().hex[:12]
+    with closing(connect(path)) as con, con:
+        con.execute(
+            "INSERT INTO digests (id, created_at, item_ids_json, rendered_md, delivered_json) VALUES (?, ?, ?, ?, ?)",
+            (
+                digest_id,
+                created_at or _now(),
+                json.dumps(item_ids, ensure_ascii=False),
+                rendered_md,
+                json.dumps(delivered or [], ensure_ascii=False),
+            ),
+        )
+    return digest_id
+
+
+def get_digest(digest_id: str, path: str | None = None) -> dict[str, Any] | None:
+    with closing(connect(path)) as con:
+        row = con.execute("SELECT * FROM digests WHERE id = ?", (digest_id,)).fetchone()
+    return _decode_digest(row) if row else None
+
+
+def list_digests(*, limit: int = 50, path: str | None = None) -> list[dict[str, Any]]:
+    """Newest-first digest list (preview only, no full markdown body)."""
+    with closing(connect(path)) as con:
+        rows = con.execute(
+            """SELECT id, created_at, item_ids_json, delivered_json,
+                      substr(rendered_md, 1, 200) AS preview
+               FROM digests ORDER BY created_at DESC LIMIT ?""",
+            (limit,),
+        ).fetchall()
+    out = []
+    for row in rows:
+        d = _decode_digest(row)
+        d["preview"] = row["preview"]
+        out.append(d)
+    return out
+
+
+def last_digest(path: str | None = None) -> dict[str, Any] | None:
+    """The most recent digest — the baseline for delta computation."""
+    with closing(connect(path)) as con:
+        row = con.execute(
+            "SELECT * FROM digests ORDER BY created_at DESC LIMIT 1"
+        ).fetchone()
+    return _decode_digest(row) if row else None
 

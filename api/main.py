@@ -20,6 +20,7 @@ from api.models import (
     HealthResponse,
     SessionHistoryResponse,
 )
+from api.routes import digests as digests_routes
 from api.routes import research as research_routes
 from api.routes import watch as watch_routes
 from agents.research_agent import run_research
@@ -83,6 +84,9 @@ app.include_router(watch_routes.router)
 
 # Deep-research routes (jobs + SSE streaming + report library)
 app.include_router(research_routes.router)
+
+# Digest routes (history, preview, manual run, delta briefs)
+app.include_router(digests_routes.router)
 
 
 @app.get("/health", response_model=HealthResponse)

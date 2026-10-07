@@ -62,6 +62,14 @@ class Settings(BaseSettings):
     llm_score_k: int = Field(default=25, description="Max items scored by the LLM per run")
     min_display_score: float = Field(default=5.0, description="Minimum LLM relevance (0-10) shown in the UI")
 
+    # Scheduler & digests
+    schedule_interval_minutes: int = Field(default=240, description="Minutes between ingest+score cycles")
+    digest_hour: int = Field(default=8, description="Hour of day (local time) the daily digest is built")
+    digest_min_score: float = Field(default=6.0, description="Minimum relevance (0-10) for digest inclusion")
+    digest_max_items: int = Field(default=12, description="Max stories in one digest")
+    digest_dir: str = Field(default="data/digests", description="Directory where digest markdown files are written")
+    slack_webhook_url: str = Field(default="", description="Optional Slack webhook for digest delivery")
+
 
 # Global settings instance — validates env vars on import
 settings = Settings()
