@@ -166,3 +166,17 @@ def test_profile_roundtrip(client):
 
 def test_job_status_404(client):
     assert client.get("/watch/jobs/nope").status_code == 404
+
+
+def test_health_reports_s1_status(client, monkeypatch):
+    from utils import system1
+    from utils.config import settings
+
+    monkeypatch.setattr(settings, "s1_enabled", False)  # avoid model loads in tests
+    monkeypatch.setattr(system1, "_router", None)
+    r = client.get("/health")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["s1"]["enabled"] is False
+    assert body["s1"]["backend"] == "off"
+    assert body["s1"]["healthy"] is True

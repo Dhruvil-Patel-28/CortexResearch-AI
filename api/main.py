@@ -97,7 +97,23 @@ app.include_router(search_routes.router)
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
     """Health check endpoint."""
-    return HealthResponse()
+    from utils.config import settings as _settings
+    from utils.system1 import get_router
+
+    router = get_router()
+    backend = "off"
+    if _settings.s1_enabled:
+        if router.has_jev and not router.breaker.skipped:
+            backend = "jev"
+        elif router.has_fallback:
+            backend = "local"
+    return HealthResponse(
+        s1={
+            "enabled": _settings.s1_enabled,
+            "backend": backend,
+            "healthy": router.breaker.healthy,
+        }
+    )
 
 
 @app.post("/research", response_model=ResearchResponse)

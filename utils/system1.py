@@ -182,3 +182,174 @@ class LocalCalibratedBackend:
             backend="local",
             latency_ms=int((time.monotonic() - started) * 1000),
         )
+
+
+# ── Router / breaker / decision log ────────────────────────────────────
+
+from collections import deque  # noqa: E402
+from collections.abc import Callable  # noqa: E402
+
+from pydantic import ValidationError  # noqa: E402
+
+
+class DecisionLog:
+    """Ring buffer of routed decisions, for the run view and report trace."""
+
+    def __init__(self, maxlen: int = 500) -> None:
+        self._entries: deque[dict] = deque(maxlen=maxlen)
+
+    def add(self, request: S1Request, decision: Decision) -> None:
+        self._entries.append(
+            {
+                "task": request.task,
+                "backend": decision.backend,
+                "confidence": round(decision.confidence, 3),
+                "latency_ms": decision.latency_ms,
+                "escalated": decision.escalated,
+            }
+        )
+
+    def recent(self, n: int = 50) -> list[dict]:
+        return list(self._entries)[-n:]
+
+
+class CircuitBreaker:
+    """After `fail_limit` consecutive backend failures, skip it for the process."""
+
+    def __init__(self, fail_limit: int = 3) -> None:
+        self._fail_limit = fail_limit
+        self._consecutive_failures = 0
+
+    def record_success(self) -> None:
+        self._consecutive_failures = 0
+
+    def record_failure(self) -> None:
+        self._consecutive_failures += 1
+
+    @property
+    def healthy(self) -> bool:
+        return self._consecutive_failures < self._fail_limit
+
+    @property
+    def skipped(self) -> bool:
+        return not self.healthy
+
+
+def _as_decision(result: object, default_backend: str) -> Decision:
+    try:
+        return Decision.model_validate(result)
+    except ValidationError as exc:
+        raise JevError(f"invalid decision from {default_backend}: {exc}") from exc
+
+
+class S1S2Router:
+    """S1 reflex first; escalate to a caller-supplied S2 path when unsure."""
+
+    def __init__(
+        self,
+        backend: SystemOneBackend | None,
+        fallback: SystemOneBackend | None,
+        escalate: Callable[[S1Request], Decision] | None,
+        threshold: float,
+        log: DecisionLog,
+        breaker: CircuitBreaker,
+    ) -> None:
+        self._backend = backend
+        self._fallback = fallback
+        self._escalate = escalate
+        self._threshold = threshold
+        self._log = log
+        self._breaker = breaker
+
+    @property
+    def has_jev(self) -> bool:
+        return self._backend is not None
+
+    @property
+    def has_fallback(self) -> bool:
+        return self._fallback is not None
+
+    @property
+    def breaker(self) -> CircuitBreaker:
+        return self._breaker
+
+    def decide(self, request: S1Request) -> Decision:
+        reflex_consulted = False
+        last_reflex: Decision | None = None
+        # Reflex 1: Jev (subject to its own circuit breaker).
+        if self._backend is not None and self._breaker.healthy:
+            reflex_consulted = True
+            try:
+                decision = self._backend.decide(request)
+                self._breaker.record_success()
+                last_reflex = decision
+                if decision.confidence >= self._threshold:
+                    self._log.add(request, decision)
+                    return decision
+            except Exception as exc:  # noqa: BLE001 — S1 failure must never break a run
+                logger.warning("S1 backend failed (%s) — trying fallback", exc)
+                self._breaker.record_failure()
+        # Reflex 2: local classifier (never breaker-gated — it runs in-process).
+        if self._fallback is not None:
+            reflex_consulted = True
+            try:
+                decision = self._fallback.decide(request)
+                last_reflex = decision
+                if decision.confidence >= self._threshold:
+                    self._log.add(request, decision)
+                    return decision
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("S1 fallback failed (%s) — escalating", exc)
+        # System 2: deliberate. Escalation = a reflex ran and was unsure; with
+        # S1 fully disabled, S2 is the primary path, not an escalation.
+        if self._escalate is not None:
+            decision = _as_decision(self._escalate(request), "s2").model_copy(
+                update={"escalated": reflex_consulted}
+            )
+            self._log.add(request, decision)
+            return decision
+        # No S2 path: return the best reflex judgment we have (keeps runs alive
+        # when the breaker trips), or a neutral decision if nothing ran.
+        decision = last_reflex or Decision(
+            label=request.options[0], score=0.5, confidence=0.0, backend="none"
+        )
+        self._log.add(request, decision)
+        return decision
+
+
+_router: S1S2Router | None = None
+
+
+def build_router(escalate: Callable[[S1Request], Decision] | None = None) -> S1S2Router:
+    """Build a router from settings. No JEV_API_KEY → local-only reflex."""
+    backend: JevBackend | None = None
+    if settings.s1_enabled and settings.jev_api_key:
+        backend = JevBackend(
+            base_url=settings.jev_base_url,
+            api_key=settings.jev_api_key,
+            model=settings.jev_model,
+        )
+    fallback: LocalCalibratedBackend | None = None
+    if settings.s1_enabled:
+        fallback = LocalCalibratedBackend()
+        try:
+            from store import db as store_db  # local import avoids a cycle in tests
+
+            fallback.fit(store_db.fetch_score_history())
+        except Exception as exc:  # noqa: BLE001 — training data is optional
+            logger.info("S1 local backend untrained (%s) — neutral until history exists", exc)
+    return S1S2Router(
+        backend=backend,
+        fallback=fallback,
+        escalate=escalate,
+        threshold=settings.s1_confidence_threshold,
+        log=DecisionLog(),
+        breaker=CircuitBreaker(),
+    )
+
+
+def get_router() -> S1S2Router:
+    global _router
+    if _router is None:
+        _router = build_router()
+    return _router

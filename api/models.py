@@ -51,6 +51,7 @@ class HealthResponse(BaseModel):
     """Health check response."""
     status: str = "healthy"
     version: str = "2.0.0"
+    s1: dict = Field(default_factory=dict, description="System 1 router status (enabled/backend/healthy)")
 
 
 class SessionHistoryResponse(BaseModel):

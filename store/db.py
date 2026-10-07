@@ -382,6 +382,18 @@ def scored_item_ids(profile_version: str, path: str | None = None) -> set[str]:
     return {r["item_id"] for r in rows}
 
 
+def fetch_score_history(path: str | None = None) -> list[tuple[str, float]]:
+    """(text, relevance) training rows for the S1 local classifier."""
+    with closing(connect(path)) as con:
+        rows = con.execute(
+            """
+            SELECT i.title, i.raw_text, s.relevance
+            FROM scores s JOIN items i ON i.id = s.item_id
+            """
+        ).fetchall()
+    return [(f"{r['title']} {r['raw_text'] or ''}".strip(), float(r["relevance"])) for r in rows]
+
+
 # ─── Bookmarks ───
 
 
