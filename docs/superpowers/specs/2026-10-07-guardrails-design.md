@@ -1,7 +1,7 @@
 # Phase 2 — Guardrails: Injection Defence, PII Scrubbing, LLM I/O Policy — Design Spec
 
 Date: 2026-10-07
-Status: Draft for review
+Status: Implemented (all 6 milestones; live-verified)
 Project: CortexResearch-AI
 
 ## 1. Goal
