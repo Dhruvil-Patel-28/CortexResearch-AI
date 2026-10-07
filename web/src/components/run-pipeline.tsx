@@ -99,6 +99,15 @@ function buildSteps(events: RunEvent[], phase: string): Step[] {
   const subQuestions = plan?.plan?.sub_questions ?? [];
   const lanes = subqLanes(events);
 
+  // S1/S2 routing summary for the Verifier step: how many claim checks the
+  // reflex handled vs escalated to the chat tier, and which backend served them.
+  const routeEvents = events.filter((e) => e.type === "route" && e.task === "claim_support");
+  const escalations = routeEvents.filter((e) => e.escalated).length;
+  const s1Backends = [...new Set(routeEvents.filter((e) => !e.escalated).map((e) => e.backend))].filter(Boolean);
+  const routingSuffix = routeEvents.length
+    ? `S1 reflex${s1Backends.length ? ` (${s1Backends.join(", ")})` : ""} · ${escalations} escalation${escalations === 1 ? "" : "s"}`
+    : undefined;
+
   return [
     {
       key: "planner",
@@ -132,7 +141,7 @@ function buildSteps(events: RunEvent[], phase: string): Step[] {
     {
       key: "verifier",
       label: "Verifier",
-      detail: verification?.label,
+      detail: [verification?.label, routingSuffix].filter(Boolean).join(" — ") || undefined,
       state: stateFor(4, verification),
     },
     {

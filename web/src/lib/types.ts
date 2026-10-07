@@ -240,6 +240,12 @@ export interface RunEvent {
   kind?: string;
   /** Running count of hits per source bucket, updated as tasks finish. */
   found?: Record<string, number>;
+  /** `route` event payload (S1/S2 decision routing). */
+  task?: string;
+  backend?: string;
+  confidence?: number;
+  escalated?: boolean;
+  latency_ms?: number;
   verification?: Verification;
   report?: Report;
   brief_id?: string | null;

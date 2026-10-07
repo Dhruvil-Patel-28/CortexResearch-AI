@@ -28,8 +28,19 @@ from agents.writer import reviser_node, writer_node
 from schemas.report import ResearchReportV2, coerce_report
 from utils.cost import CostMeter
 from utils.memory import session_manager
+from utils.system1 import DecisionLog, get_router
 
 logger = logging.getLogger(__name__)
+
+
+def attach_decision_trace(model_trace: dict | list, log: DecisionLog) -> dict:
+    """Merge the S1 decision log into a report's model_trace (≤ 50 entries).
+
+    `model_trace` is normally a dict; a list (bare call log) is wrapped so the
+    decision trace always has a stable object shape for the frontend.
+    """
+    base = model_trace if isinstance(model_trace, dict) else {"calls": model_trace}
+    return {**base, "decisions": log.recent(50)}
 
 
 def build_research_graph() -> StateGraph:
@@ -127,7 +138,7 @@ def run_research(
             "Nothing in this report should be treated as a finding — re-run the question."
         )
         report.cost_usd = meter.total_usd
-        report.model_trace = meter.trace()
+        report.model_trace = attach_decision_trace(meter.trace(), get_router().log)
         return {
             "session_id": session_id,
             "report": report.model_dump(),
@@ -135,7 +146,7 @@ def run_research(
             "agent_steps": [],
             "verification": {"checked": 0, "supported": 0, "unsupported": 0, "unsupported_claims": [], "notes": "run failed"},
             "cost_usd": meter.total_usd,
-            "model_trace": meter.trace(),
+            "model_trace": report.model_trace,
             "error": str(exc),
             "duration_s": round(time.time() - started, 2),
         }
@@ -204,7 +215,7 @@ def _finalise_report(
     report = coerce_report(raw, query=query, depth=depth, keep_verification=True)
     report.depth = depth
     report.cost_usd = meter.total_usd
-    report.model_trace = meter.trace()
+    report.model_trace = attach_decision_trace(meter.trace(), get_router().log)
 
     verification = final_state.get("verification") or {}
     # The reviser is authoritative when it ran: it re-labels each flagged claim as

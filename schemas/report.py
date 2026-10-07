@@ -343,7 +343,10 @@ class ResearchReportV2(BaseModel):
     verification: Verification = Field(default_factory=Verification)
 
     reading_time_min: int = 1
-    model_trace: list[dict[str, Any]] = Field(default_factory=list)
+    # Object shape: {"calls": [...], "decisions": [...]} — decisions are the
+    # S1/S2 routed judgments made during the run (task, backend, confidence…).
+    # Legacy reports carry a bare call list; both shapes are accepted.
+    model_trace: dict[str, Any] | list[dict[str, Any]] = Field(default_factory=dict)
     cost_usd: float = 0.0
     created_at: str = Field(default_factory=_utc_now)
 

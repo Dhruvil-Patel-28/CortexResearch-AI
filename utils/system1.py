@@ -273,6 +273,10 @@ class S1S2Router:
     def breaker(self) -> CircuitBreaker:
         return self._breaker
 
+    @property
+    def log(self) -> DecisionLog:
+        return self._log
+
     def decide(self, request: S1Request) -> Decision:
         reflex_consulted = False
         last_reflex: Decision | None = None
