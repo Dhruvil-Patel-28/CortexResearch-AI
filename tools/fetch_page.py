@@ -32,6 +32,7 @@ def fetch_page_text(url: str, *, timeout: float = 10.0, max_chars: int = 7000) -
     Fetch a URL and return cleaned main-body text ("" on any failure).
 
     Never raises: a dead link simply contributes no text to the evidence.
+    Output is guardrail-sanitized (PII scrub + injection neutralization).
     """
     if not url or not url.startswith(("http://", "https://")):
         return ""
@@ -48,7 +49,10 @@ def fetch_page_text(url: str, *, timeout: float = 10.0, max_chars: int = 7000) -
         content_type = response.headers.get("content-type", "")
         if content_type and not any(t in content_type for t in ("html", "text", "xml")):
             return ""
-        return extract_main_text(response.text, max_chars=max_chars)
+        from guardrails import sanitize_content
+
+        text, _ = sanitize_content(extract_main_text(response.text, max_chars=max_chars))
+        return text
     except Exception as e:  # noqa: BLE001 — network errors are expected on the open web
         logger.debug("fetch failed for %s: %s", url, e)
         return ""

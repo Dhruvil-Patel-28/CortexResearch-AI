@@ -23,9 +23,14 @@ def web_search_results(query: str, max_results: int = _MAX_RESULTS) -> list[dict
     """
     Search the web and return structured results.
 
+    Titles and snippets are guardrail-sanitized (PII scrub + injection
+    neutralization) before leaving the tool.
+
     Returns:
         [{"title", "url", "snippet", "source"}] — empty on failure.
     """
+    from guardrails import sanitize_content
+
     for attempt in (1, 2):
         try:
             results: list[dict] = []
@@ -34,11 +39,13 @@ def web_search_results(query: str, max_results: int = _MAX_RESULTS) -> list[dict
                 title = (r.get("title") or "").strip()
                 if not url and not title:
                     continue
+                snippet, _ = sanitize_content((r.get("body") or "").strip())
+                title, _ = sanitize_content(title)
                 results.append(
                     {
                         "title": title or url,
                         "url": url,
-                        "snippet": (r.get("body") or "").strip(),
+                        "snippet": snippet,
                         "source": _domain(url),
                     }
                 )

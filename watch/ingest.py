@@ -98,6 +98,21 @@ def run_ingest(
 
     # Group the same story coming from multiple sources into one cluster
     cluster_map = assign_clusters(all_items)
+
+    # Guardrails: scrub PII + neutralize injections before anything is stored
+    from guardrails import sanitize_content
+
+    guardrail_totals: dict[str, int] = {}
+    for item in all_items:
+        if item.raw_text:
+            item.raw_text, summary = sanitize_content(item.raw_text)
+            guardrail_totals["pii"] = guardrail_totals.get("pii", 0) + len(summary["pii_kinds"])
+            guardrail_totals["injections"] = guardrail_totals.get("injections", 0) + (
+                summary["injection_count"] if summary["injection_action"] == "strip" else 0
+            )
+    if any(guardrail_totals.values()):
+        logger.info("Guardrails at ingest: %s", guardrail_totals)
+
     for item in all_items:
         item.cluster_key = cluster_map.get(item.id, "")
 

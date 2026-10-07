@@ -408,7 +408,14 @@ def _run_extra_round(queries: list[str], fetched: dict[str, str], registry: Sour
 
 
 def _render_evidence(sub_findings: list[dict], registry: SourceRegistry, *, per_source: int = 700) -> str:
-    """Group registered evidence under the sub-question it answers."""
+    """Group registered evidence under the sub-question it answers.
+
+    Every source body is wrapped in <untrusted> delimiters — data from the web,
+    never instructions — and the whole evidence block is prefaced once by
+    UNTRUSTED_DIRECTIVE.
+    """
+    from guardrails.policy import UNTRUSTED_DIRECTIVE, wrap_untrusted
+
     blocks: list[str] = []
     for finding in sub_findings:
         lines = [f"## {finding['question']}"]
@@ -422,11 +429,12 @@ def _render_evidence(sub_findings: list[dict], registry: SourceRegistry, *, per_
             if source["url"]:
                 head += f" — {source['url']}"
             date = f" | {source['published_at'][:10]}" if source.get("published_at") else ""
-            lines.append(f"\n{head} ({source['kind']}{date})\n{source['snippet'][:per_source]}")
+            body = wrap_untrusted(source["snippet"][:per_source], source.get("url", ""))
+            lines.append(f"\n{head} ({source['kind']}{date})\n{body}")
         blocks.append("\n".join(lines))
 
     text = "\n\n".join(blocks)
     if len(text) > MAX_EVIDENCE_CHARS:
         text = text[:MAX_EVIDENCE_CHARS] + "\n\n[evidence truncated for length]"
         logger.warning("Evidence truncated to %d chars", MAX_EVIDENCE_CHARS)
-    return text
+    return f"{UNTRUSTED_DIRECTIVE}\n\n{text}"
