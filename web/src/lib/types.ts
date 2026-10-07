@@ -238,6 +238,8 @@ export interface RunEvent {
   tasks?: number;
   /** Which retrieval channel just finished a task for this sub-question. */
   kind?: string;
+  /** Running count of hits per source bucket, updated as tasks finish. */
+  found?: Record<string, number>;
   verification?: Verification;
   report?: Report;
   brief_id?: string | null;

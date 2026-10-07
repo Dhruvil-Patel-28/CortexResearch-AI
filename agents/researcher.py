@@ -18,6 +18,7 @@ anything critical is missing and runs one more targeted round if so.
 from __future__ import annotations
 
 import logging
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
@@ -89,6 +90,30 @@ def _run_task(kind: str, query: str) -> list[dict]:
         return []
 
 
+# Friendly names for the sources the fan-out touches. Known ones get their own
+# pill in the live retrieval graph; everything else folds into "Web".
+SOURCE_BUCKETS = {
+    "hackernews": "Hacker News",
+    "news.ycombinator.com": "Hacker News",
+    "arxiv": "arXiv",
+    "arxiv.org": "arXiv",
+    "reddit": "Reddit",
+    "reddit.com": "Reddit",
+    "old.reddit.com": "Reddit",
+    "github": "GitHub",
+    "github.com": "GitHub",
+    "producthunt": "Product Hunt",
+    "producthunt.com": "Product Hunt",
+    "rss": "Blogs",
+}
+UNKNOWN_BUCKET = "Web"
+
+
+def _source_bucket(source: str) -> str:
+    """Map a hit's `source` to a display bucket; unknowns fold into 'Web'."""
+    return SOURCE_BUCKETS.get((source or "").strip().lower(), UNKNOWN_BUCKET)
+
+
 def researcher_node(state: ResearchState) -> dict:
     """Gather and register evidence for every planned sub-question."""
     query = (state.get("research_query") or "").strip()
@@ -135,6 +160,7 @@ def researcher_node(state: ResearchState) -> dict:
 
     # Threads run the sub-questions *in parallel*; every completed task
     # updates its sub-question's lane so users watch the threads race.
+    found: Counter[str] = Counter()
     with ThreadPoolExecutor(max_workers=6) as executor:
         futures = {executor.submit(_run_task, kind, q): (idx, kind, q) for idx, kind, q in tasks}
         for future in as_completed(futures):
@@ -144,6 +170,10 @@ def researcher_node(state: ResearchState) -> dict:
             except Exception as e:  # noqa: BLE001
                 logger.warning("task failed/timed out %s: %s", key[1], e)
                 results[key] = []
+            for hit in results[key]:
+                src = (hit.get("source") or "").strip()
+                if src:
+                    found[_source_bucket(src)] += 1
             done_per_sq[key[0]] = done_per_sq.get(key[0], 0) + 1
             sq_question = (sub_questions[key[0]].get("question") or query)[:80]
             emit_event(
@@ -155,6 +185,7 @@ def researcher_node(state: ResearchState) -> dict:
                 done=done_per_sq[key[0]],
                 tasks=tasks_per_sq.get(key[0], 1),
                 kind=key[1],
+                found=dict(found),
             )
             if done_per_sq[key[0]] == tasks_per_sq.get(key[0], 1):
                 emit_event(

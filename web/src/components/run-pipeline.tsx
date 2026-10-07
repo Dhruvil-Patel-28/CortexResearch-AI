@@ -344,6 +344,32 @@ function LaneRow({ lane, running }: { lane: Lane; running: boolean }) {
   );
 }
 
+/** Latest per-source hit counts, from the most recent `subq` event carrying one. */
+function foundSources(events: RunEvent[]): Record<string, number> {
+  const last = [...events].reverse().find((e) => e.type === "subq" && e.found);
+  return (last?.found as Record<string, number>) ?? {};
+}
+
+/** Compact pills showing what the fan-out actually brought back, live. */
+function SourcePills({ found }: { found: Record<string, number> }) {
+  const entries = Object.entries(found).sort((a, b) => b[1] - a[1]);
+  if (entries.length === 0) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="text-[10px] uppercase tracking-wide text-ink-faint">Pulled from</span>
+      {entries.map(([label, count]) => (
+        <span
+          key={`${label}-${count}`}
+          className="rise-in inline-flex items-center gap-1 rounded-full border border-line bg-surface-3 px-2 py-0.5 text-[10px] text-ink-soft"
+        >
+          {label}
+          <span className="font-mono text-[9px] text-accent-soft">{count}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export function RunPipeline({ events, phase }: { events: RunEvent[]; phase: string }) {
   const steps = buildSteps(events, phase);
   const plan = lastEvent(events, "plan");
@@ -392,12 +418,13 @@ export function RunPipeline({ events, phase }: { events: RunEvent[]; phase: stri
                   </ul>
                 )}
                 {step.lanes && step.lanes.length > 0 && (
-                  <div className="mt-2.5 flex flex-col gap-1.5 rounded-lg border border-line bg-surface-2/60 p-2.5">
+                  <div className="mt-2.5 flex flex-col gap-2 rounded-lg border border-line bg-surface-2/60 p-2.5">
                     <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-ink-faint">
                       <Network className="size-3" />
                       {live && step.state === "active" ? "Live retrieval graph" : "Retrieval graph"}
                     </p>
                     <ResearchGraph lanes={step.lanes} tools={toolsEvent} live={live} />
+                    <SourcePills found={foundSources(events)} />
                     {step.lanes.map((lane) => (
                       <LaneRow key={lane.index} lane={lane} running={step.state === "active"} />
                     ))}
