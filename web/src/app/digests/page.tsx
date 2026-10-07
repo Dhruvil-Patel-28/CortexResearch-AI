@@ -160,9 +160,9 @@ export default function DigestsPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
-      <header className="flex flex-wrap items-end justify-between gap-3">
+      <header className="masthead-tick flex flex-wrap items-end justify-between gap-3 pt-2">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Digests</h1>
+          <h1 className="text-xl font-bold tracking-tight">Digests</h1>
           <p className="mt-1 text-xs text-ink-soft">
             Daily briefs assembled from your ranked pulse — with an honest “what changed since last
             time” section.

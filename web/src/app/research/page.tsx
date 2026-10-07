@@ -71,8 +71,8 @@ function ResearchContent() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
-      <header>
-        <h1 className="text-xl font-semibold tracking-tight">Deep research</h1>
+      <header className="masthead-tick pt-2">
+        <h1 className="text-xl font-bold tracking-tight">Deep research</h1>
         <p className="mt-1 text-xs leading-relaxed text-ink-soft">
           A research team plans the question, reads the sources it finds, verifies every claim against
           what it actually read, and writes a report you should not have to follow up on.

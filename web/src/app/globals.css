@@ -1,41 +1,51 @@
 /**
- * Design tokens — dark product shell with a light editorial reading surface.
+ * Cortex design system — "Signal Observatory".
+ *
+ * A dark instrument-panel shell: deep blue-charcoal surfaces with a cool
+ * blueprint cast, a signal-amber accent (like a plotter pen on a radar
+ * screen), mint for positive signal, and a warm-paper editorial surface for
+ * reading reports. Atmosphere comes from layered radial glows and a faint
+ * coordinate grid — CSS only, GPU-cheap, and fully disabled under
+ * prefers-reduced-motion.
+ *
  * Tailwind v4 CSS-first theme configuration.
  */
 
 @import "tailwindcss";
 
 @theme {
-  /* Shell surfaces (dark) */
-  --color-shell: #0a0b0d;
-  --color-surface: #111214;
-  --color-surface-2: #17181c;
-  --color-surface-3: #1d1f24;
-  --color-line: #26282e;
-  --color-line-strong: #34373f;
+  /* Shell surfaces (dark, cool cast) */
+  --color-shell: #0a0c0f;
+  --color-surface: #101317;
+  --color-surface-2: #151a20;
+  --color-surface-3: #1b222b;
+  --color-line: #222a34;
+  --color-line-strong: #33404e;
 
   /* Text */
-  --color-ink: #eceef2;
-  --color-ink-soft: #a9afba;
-  --color-ink-faint: #767c88;
+  --color-ink: #e9eef4;
+  --color-ink-soft: #9dabb9;
+  --color-ink-faint: #66778a;
 
-  /* Accents */
-  --color-accent: #7c6bf5;
-  --color-accent-soft: #a99cff;
-  --color-positive: #35c48a;
-  --color-warning: #e7b23c;
-  --color-danger: #f2555a;
+  /* Signal palette */
+  --color-accent: #ffb224;
+  --color-accent-soft: #ffc94d;
+  --color-positive: #3ecf8e;
+  --color-warning: #ff8a3d;
+  --color-danger: #ff5d5d;
+  --color-glow: #2dd4bf;
 
   /* Reading surface (light, editorial) */
-  --color-paper: #fbfaf7;
-  --color-paper-2: #f3f1ec;
-  --color-paper-line: #e2ded4;
-  --color-paper-ink: #1b1a17;
-  --color-paper-ink-soft: #4b4740;
-  --color-paper-ink-faint: #7c776d;
+  --color-paper: #faf7f0;
+  --color-paper-2: #f1ece1;
+  --color-paper-line: #ded7c6;
+  --color-paper-ink: #1c1a15;
+  --color-paper-ink-soft: #4d473c;
+  --color-paper-ink-faint: #837b6b;
 
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-sans: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
   --font-serif: var(--font-newsreader), ui-serif, Georgia, serif;
 
   --radius-card: 14px;
@@ -54,10 +64,41 @@ body {
 body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  font-feature-settings: "ss01" on;
+}
+
+/* ── Atmosphere: glows + coordinate grid + grain ─────────────────────── */
+
+@media (prefers-reduced-motion: no-preference) {
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -2;
+    pointer-events: none;
+    background:
+      radial-gradient(56rem 32rem at 8% -8%, rgb(255 178 36 / 0.07), transparent 60%),
+      radial-gradient(48rem 30rem at 96% 12%, rgb(45 212 191 / 0.06), transparent 60%),
+      radial-gradient(60rem 40rem at 50% 118%, rgb(45 212 191 / 0.05), transparent 62%);
+  }
+
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image:
+      linear-gradient(to right, rgb(157 171 185 / 0.045) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(157 171 185 / 0.045) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: radial-gradient(70rem 44rem at 24% 0%, black 30%, transparent 78%);
+  }
 }
 
 ::selection {
-  background: color-mix(in srgb, var(--color-accent) 40%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 32%, transparent);
+  color: var(--color-ink);
 }
 
 /* Scrollbars that fit the shell */
@@ -76,10 +117,38 @@ body {
   background-clip: content-box;
 }
 
+/* ── Primitives ──────────────────────────────────────────────────────── */
+
 @utility card {
-  background: var(--color-surface);
+  background: linear-gradient(180deg, var(--color-surface-2), var(--color-surface));
   border: 1px solid var(--color-line);
   border-radius: var(--radius-card);
+  box-shadow:
+    0 1px 0 0 rgb(255 255 255 / 0.03) inset,
+    0 8px 24px -16px rgb(0 0 0 / 0.55);
+}
+
+@utility card-hover {
+  transition:
+    border-color 200ms ease,
+    transform 200ms ease,
+    box-shadow 200ms ease;
+
+  &:hover {
+    border-color: color-mix(in srgb, var(--color-accent) 34%, var(--color-line));
+    transform: translateY(-2px);
+    box-shadow:
+      0 1px 0 0 rgb(255 255 255 / 0.04) inset,
+      0 14px 32px -16px rgb(0 0 0 / 0.65),
+      0 0 0 1px color-mix(in srgb, var(--color-accent) 12%, transparent);
+  }
+}
+
+@utility glass {
+  background: color-mix(in srgb, var(--color-shell) 72%, transparent);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  border-color: color-mix(in srgb, var(--color-line-strong) 60%, transparent);
 }
 
 @utility chip {
@@ -88,7 +157,7 @@ body {
   gap: 0.375rem;
   border-radius: 999px;
   border: 1px solid var(--color-line);
-  background: var(--color-surface-2);
+  background: color-mix(in srgb, var(--color-surface-3) 80%, transparent);
   padding: 0.125rem 0.5rem;
   font-size: 0.6875rem;
   line-height: 1.25rem;
@@ -103,7 +172,56 @@ body {
   }
 }
 
-/* Editorial reading typography for reports */
+/* Section masthead marker — a short amber tick above page titles. */
+@utility masthead-tick {
+  position: relative;
+
+  &::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 2rem;
+    height: 3px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--color-accent), transparent);
+  }
+}
+
+/* ── Entrance motion ─────────────────────────────────────────────────── */
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .rise-in {
+    animation: rise-in 460ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .stagger > * {
+    animation: rise-in 460ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .stagger > *:nth-child(1) { animation-delay: 30ms; }
+  .stagger > *:nth-child(2) { animation-delay: 70ms; }
+  .stagger > *:nth-child(3) { animation-delay: 110ms; }
+  .stagger > *:nth-child(4) { animation-delay: 150ms; }
+  .stagger > *:nth-child(5) { animation-delay: 190ms; }
+  .stagger > *:nth-child(6) { animation-delay: 230ms; }
+  .stagger > *:nth-child(7) { animation-delay: 270ms; }
+  .stagger > *:nth-child(8) { animation-delay: 310ms; }
+  .stagger > *:nth-child(n + 9) { animation-delay: 350ms; }
+}
+
+/* ── Editorial reading typography for reports ────────────────────────── */
+
 @utility prose-report {
   color: var(--color-paper-ink);
   font-size: 1.0625rem;
@@ -144,8 +262,9 @@ body {
     margin: 0.35rem 0;
   }
   & a {
-    color: #4a3ec9;
+    color: #a05c10;
     text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, #a05c10 40%, transparent);
     text-underline-offset: 2px;
   }
   & code {
@@ -156,8 +275,8 @@ body {
     font-family: var(--font-mono);
   }
   & pre {
-    background: #16161a;
-    color: #eceef2;
+    background: #14171c;
+    color: #e9eef4;
     border-radius: 10px;
     padding: 1rem;
     overflow-x: auto;

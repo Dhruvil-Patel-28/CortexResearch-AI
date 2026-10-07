@@ -92,8 +92,8 @@ export default function TopicsPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6">
-      <header className="mb-6">
-        <h1 className="text-lg font-semibold tracking-tight">Your interests</h1>
+      <header className="masthead-tick mb-6 pt-2">
+        <h1 className="text-xl font-bold tracking-tight">Your interests</h1>
         <p className="mt-1 max-w-xl text-xs leading-relaxed text-ink-soft">
           This profile is the whole point of the radar: every story is scored against it, and the
           &ldquo;why this matters to you&rdquo; line is written from it. Editing it invalidates

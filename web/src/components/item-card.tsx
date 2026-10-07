@@ -47,7 +47,7 @@ export function ItemCard({
   return (
     <article
       className={cn(
-        "card group relative p-4 transition-colors hover:border-line-strong",
+        "card card-hover group relative p-4",
         item.bookmarked && "border-accent/40",
       )}
     >

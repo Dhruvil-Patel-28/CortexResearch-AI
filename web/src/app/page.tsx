@@ -74,9 +74,9 @@ export default function PulsePage() {
       />
 
       <div className="mx-auto max-w-4xl px-4 py-5">
-        <header className="mb-4 flex items-end justify-between gap-4">
+        <header className="masthead-tick mb-5 flex items-end justify-between gap-4 pt-2">
           <div>
-            <h1 className="text-lg font-semibold tracking-tight">Market pulse</h1>
+            <h1 className="text-xl font-bold tracking-tight">Market pulse</h1>
             <p className="mt-0.5 text-xs text-ink-faint">
               {feed.loading && !feed.data
                 ? "Loading your radar…"
@@ -85,6 +85,12 @@ export default function PulsePage() {
                   }`}
             </p>
           </div>
+          {!feed.loading && (feed.data?.count ?? 0) > 0 && (
+            <span className="chip !border-positive/30 !bg-positive/10 !text-positive">
+              <span className="size-1.5 rounded-full bg-positive" />
+              live feed
+            </span>
+          )}
           {feed.loading && feed.data && (
             <Loader2 className="size-3.5 animate-spin text-ink-faint" />
           )}
@@ -127,7 +133,7 @@ export default function PulsePage() {
           </div>
         )}
 
-        <div className="flex flex-col gap-3">
+        <div className="stagger flex flex-col gap-3">
           {items.map((item) => (
             <ItemCard
               key={item.cluster_key || item.id}

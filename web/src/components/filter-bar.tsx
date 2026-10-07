@@ -42,7 +42,7 @@ export function FilterBar({
   total: number;
 }) {
   return (
-    <div className="sticky top-0 z-10 border-b border-line bg-shell/90 backdrop-blur">
+    <div className="glass sticky top-0 z-10 border-b">
       <div className="mx-auto flex max-w-4xl flex-col gap-3 px-4 py-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex rounded-lg border border-line bg-surface p-0.5">
@@ -53,7 +53,7 @@ export function FilterBar({
                 className={cn(
                   "rounded-md px-2.5 py-1 text-xs font-medium transition-colors focus-ring",
                   state.window === w.key
-                    ? "bg-surface-3 text-ink"
+                    ? "bg-accent/15 text-accent-soft"
                     : "text-ink-faint hover:text-ink-soft",
                 )}
               >
@@ -100,7 +100,7 @@ export function FilterBar({
             onClick={() => onChange({ source: undefined })}
             className={cn(
               "chip transition-colors focus-ring",
-              !state.source && "!border-line-strong !text-ink",
+              !state.source && "!border-accent/40 !bg-accent/10 !text-accent-soft",
             )}
           >
             All sources
@@ -112,7 +112,7 @@ export function FilterBar({
               onClick={() => onChange({ source: state.source === key ? undefined : key })}
               className={cn(
                 "chip transition-colors focus-ring",
-                state.source === key && "!border-line-strong !text-ink",
+                state.source === key && "!border-accent/40 !bg-accent/10 !text-accent-soft",
               )}
             >
               <span className="size-1.5 rounded-full" style={{ background: meta.tone }} />
@@ -129,7 +129,7 @@ export function FilterBar({
               onClick={() => onChange({ minScore: step.value })}
               className={cn(
                 "chip transition-colors focus-ring",
-                state.minScore === step.value && "!border-line-strong !text-ink",
+                state.minScore === step.value && "!border-accent/40 !bg-accent/10 !text-accent-soft",
               )}
             >
               {step.label}

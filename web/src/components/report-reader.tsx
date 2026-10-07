@@ -232,7 +232,7 @@ export function ReportReader({ report, reportId }: { report: Report; reportId: s
         <header className="border-b border-paper-line pb-6">
           <div className="flex flex-wrap items-center gap-2 text-[11px] text-paper-ink-faint">
             <span className="rounded-full border border-paper-line bg-paper-2 px-2 py-0.5 capitalize">
-              {report.depth} brief
+              {report.depth === "brief" ? "quick brief" : `${report.depth} brief`}
             </span>
             <span className="inline-flex items-center gap-1">
               <BookOpen className="size-3" />

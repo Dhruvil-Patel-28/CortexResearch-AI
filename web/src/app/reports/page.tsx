@@ -35,9 +35,9 @@ export default function ReportsPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
-      <header className="flex flex-wrap items-end justify-between gap-3">
+      <header className="masthead-tick flex flex-wrap items-end justify-between gap-3 pt-2">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Reports</h1>
+          <h1 className="text-xl font-bold tracking-tight">Reports</h1>
           <p className="mt-1 text-xs text-ink-soft">
             {items.length
               ? `${items.length} saved deep brief${items.length === 1 ? "" : "s"} — cited, verified and exportable.`
@@ -90,7 +90,7 @@ export default function ReportsPage() {
                   </h2>
                   <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-ink-faint">
                     <span className={cn("capitalize", STATUS_TONE[report.status])}>{report.status}</span>
-                    <span>{report.depth} brief</span>
+                    <span>{report.depth === "brief" ? "quick brief" : `${report.depth} brief`}</span>
                     <span>{report.reading_time_min} min read</span>
                     <span>{report.source_count} sources</span>
                     <span className="inline-flex items-center gap-1">

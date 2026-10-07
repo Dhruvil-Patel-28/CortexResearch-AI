@@ -52,7 +52,7 @@ export const SOURCE_META: Record<string, { label: string; short: string; tone: s
   arxiv: { label: "arXiv", short: "arXiv", tone: "#e2554f" },
   rss: { label: "Blogs & RSS", short: "RSS", tone: "#4fa8e2" },
   reddit: { label: "Reddit", short: "Reddit", tone: "#f2555a" },
-  github: { label: "GitHub", short: "GitHub", tone: "#a99cff" },
+  github: { label: "GitHub", short: "GitHub", tone: "#2dd4bf" },
   producthunt: { label: "Product Hunt", short: "PH", tone: "#da552f" },
 };
 

@@ -75,8 +75,8 @@ export default function LibraryPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
-      <header>
-        <h1 className="text-xl font-semibold tracking-tight">Library</h1>
+      <header className="masthead-tick pt-2">
+        <h1 className="text-xl font-bold tracking-tight">Library</h1>
         <p className="mt-1 text-xs text-ink-soft">
           Search everything you have saved — sources and reports, ranked by hybrid
           retrieval. Ask connections and the graph layer can answer multi-hop questions.

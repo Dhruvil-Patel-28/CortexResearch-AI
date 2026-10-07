@@ -60,8 +60,10 @@ export function RefreshButton({ onDone }: { onDone?: () => void }) {
       onClick={start}
       disabled={busy}
       className={cn(
-        "flex items-center justify-center gap-2 rounded-lg border border-line bg-surface-2 px-3 py-2 text-xs font-medium transition-colors focus-ring",
-        busy ? "text-ink-faint" : "text-ink-soft hover:border-line-strong hover:text-ink",
+        "flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all focus-ring",
+        busy
+          ? "bg-surface-3 text-ink-faint"
+          : "bg-gradient-to-b from-accent-soft to-accent text-shell shadow-[0_2px_12px_-4px] shadow-accent/50 hover:brightness-105 active:brightness-95",
       )}
     >
       {busy ? (
