@@ -93,16 +93,14 @@ def _install_fakes(monkeypatch, *, developments, verdicts=None, total=2):
                 return json.dumps(verdicts)
             ids = [line.split("\n")[0].strip() for line in user.split("\n\n") if line.startswith("c")]
             return json.dumps({"verdicts": [{"id": cid, "supported": True, "reason": "matches"} for cid in ids], "notes": "solid"})
+        if "Reviser of an autonomous" in system:
+            # The patch pass removes the flagged (uncited) claim in place.
+            writer_outputs.append("revision")
+            return json.dumps({"revisions": [{"index": 0, "action": "remove"}]})
         if "Writer of an autonomous" in system:
-            revising = "YOUR PREVIOUS DRAFT" in user
             payload = _report_payload(developments)
-            if revising:
-                # The revision pass drops the uncited claim and keeps the rest.
-                payload["key_developments"] = [d for d in developments if "s99" not in d["sources"]]
-                payload["title"] = "GPU supply in 2026 (revised)"
-            rendered = json.dumps(payload)
-            writer_outputs.append("revision" if revising else "draft")
-            return rendered
+            writer_outputs.append("draft")
+            return json.dumps(payload)
         return "{}"
 
     fake = FakeLLM(responder)
@@ -275,8 +273,10 @@ def test_pipeline_survives_a_writer_that_returns_prose(monkeypatch):
     _, _ = _install_fakes(monkeypatch, developments=[DEVELOPMENT_OK])
     monkeypatch.setattr(writer_mod, "invoke_llm", lambda llm, msgs, meter=None, label="": AIMessage(content="I could not comply."))
 
+    # A writer that cannot produce content must fail the run loudly — the
+    # result carries the error and a report explicitly marked as failed,
+    # never a silent empty shell.
     result = run_research("What is happening?", depth="brief")
-    report = ResearchReportV2.model_validate(result["report"])
-
-    assert report.title  # still a valid, if empty, report
-    assert report.key_developments == []
+    assert result.get("error"), "the failure must be surfaced, not swallowed"
+    assert "Research failed" in result["report"]["title"]
+    assert "should be treated as a finding" in result["report"]["risks_and_uncertainty"]

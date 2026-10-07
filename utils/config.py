@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     model_name: str = Field(default="claude-sonnet-5-5", description="Frontier model for research & report synthesis")
     model_fast: str = Field(default="claude-haiku-4-5-20251001", description="Cheap fast model for scoring & extraction")
     temperature: float = Field(default=0.7, ge=0.0, le=2.0, description="Default LLM temperature")
-    max_tokens_smart: int = Field(default=8192, description="Max output tokens for the smart tier")
+    max_tokens_smart: int = Field(default=16384, description="Max output tokens for the smart tier (full-report JSON must fit)")
     max_tokens_fast: int = Field(default=2048, description="Max output tokens for the fast tier")
 
     # RAG Configuration

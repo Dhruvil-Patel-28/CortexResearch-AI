@@ -46,6 +46,7 @@ function buildSteps(events: RunEvent[], phase: string): Step[] {
   const plan = lastEvent(events, "plan");
   const tools = lastEvent(events, "tools");
   const reading = [...events].reverse().find((e) => e.stage === "reading");
+  const gathering = [...events].reverse().find((e) => e.stage === "gathering");
   const written = [...events].reverse().find((e) => e.stage === "written");
   const verification = lastEvent(events, "verification");
   const revised = [...events].reverse().find((e) => e.stage === "revising");
@@ -83,7 +84,8 @@ function buildSteps(events: RunEvent[], phase: string): Step[] {
       label: "Researcher",
       detail: tools
         ? `${tools.radar_store ?? 0} radar items · ${tools.knowledge_base ?? 0} knowledge-base chunks · ${tools.web_search ?? 0} web hits`
-        : undefined,
+        : gathering?.label ??
+          (currentStage === "gathering" ? "Running parallel retrieval threads…" : undefined),
       state: stateFor(1, tools),
     },
     {

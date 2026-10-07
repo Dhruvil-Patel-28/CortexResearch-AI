@@ -84,7 +84,68 @@ def json_object_from(text: str) -> dict[str, Any]:
                             return parsed
                     except json.JSONDecodeError:
                         break
+
+    # Last resort: the response looks like JSON but was cut off mid-object
+    # (hit the output-token cap). Salvage the complete fields by closing the
+    # open string/brackets at various cut points.
+    start = text.find("{")
+    if start != -1:
+        repaired = _repair_truncated(text[start:])
+        if repaired is not None:
+            logger.warning("Salvaged a truncated JSON response by closing open brackets")
+            return repaired
     raise JsonCallError("no JSON object found in response")
+
+
+def _repair_truncated(fragment: str, *, max_cuts: int = 60) -> dict[str, Any] | None:
+    """
+    Close an unterminated JSON object at the latest possible cut point.
+
+    Walks the fragment tracking string/bracket state; then, from the end
+    backwards, trims to successive value boundaries and closes whatever is
+    still open. Returns the first parseable dict, or None.
+    """
+    # Boundaries where a complete value has just ended: after "}, " "], " etc.
+    # Each cut point remembers the bracket stack at that moment, since closing
+    # must restore the nesting as it was there, not at the end of the fragment.
+    cut_points: list[tuple[int, list[str]]] = []
+    stack: list[str] = []
+    in_string = False
+    escaped = False
+    for i, ch in enumerate(fragment):
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch in "{[":
+            stack.append(ch)
+        elif ch in "}]" and stack:
+            stack.pop()
+            cut_points.append((i + 1, list(stack)))
+        elif ch == "," and stack:
+            cut_points.append((i, list(stack)))
+        if len(cut_points) >= 2000:
+            break
+
+    if not stack and not in_string:
+        return None  # genuinely malformed, not truncated
+
+    for cut, stack_at_cut in reversed(cut_points[-max_cuts:]):
+        head = fragment[:cut].rstrip(",")
+        probe = head + "".join("}" if c == "{" else "]" for c in reversed(stack_at_cut))
+        try:
+            parsed = json.loads(probe)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict) and parsed:
+            return parsed
+    return None
 
 
 def call_json(

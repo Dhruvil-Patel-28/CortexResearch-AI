@@ -18,13 +18,14 @@ import logging
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
+from pydantic import BaseModel, field_validator
 
 from agents.events import emit_event
 from agents.state import ResearchState
 from schemas.report import ResearchReportV2, coerce_report, estimate_reading_time
 from utils.cost import CostMeter, invoke_llm
 from utils.llm import get_llm
-from utils.llm_json import JsonCallError, json_object_from
+from utils.llm_json import JsonCallError, call_json, json_object_from
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +82,16 @@ WRITER_HINT = """{
 def writer_node(state: ResearchState) -> dict:
     """Draft the report from the gathered evidence."""
     emit_event(state, "stage", stage="writing", label="Writing the report", pct=58)
-    report = _generate(state, revise=False)
+    report = _generate(state)
+    if _is_empty(report):
+        # One retry with a stricter instruction before giving up loudly.
+        logger.warning("Writer produced an empty report — retrying once")
+        report = _generate(state, strict=True)
+    if _is_empty(report):
+        raise RuntimeError(
+            "Writer failed twice to produce report content — failing the run "
+            "rather than publishing an empty report"
+        )
     emit_event(state, "stage", stage="written", label=f"Draft ready — {report.reading_time_min} min read", pct=72)
 
     step = {
@@ -125,24 +135,173 @@ def reviser_node(state: ResearchState) -> dict:
         label=f"Repairing {len(unsupported)} unsupported claim(s)",
         pct=88,
     )
-    revised = _generate(state, revise=True, draft=draft, unsupported=unsupported)
-    revised.verification = _final_verification(revised, verification)
 
-    step = {
-        "agent_name": "Reviser",
-        "action": f"Revised the report after verification flagged {len(unsupported)} unsupported claim(s)",
-        "tools_used": ["ReportWriter"],
+    # Patch-based revision: the model returns only *edits for the flagged
+    # claims*, spliced into the draft locally. Re-emitting the whole report
+    # used to hit the output-token cap, truncate the JSON, and (before the
+    # guards below) publish an empty shell over a good draft.
+    patched = _patch_draft(state, draft, unsupported)
+    if patched is not None:
+        revised = coerce_report(patched, query=state.get("research_query", ""), depth=state.get("depth", "standard"))
+        valid_ids = {s.get("id") for s in (state.get("source_registry") or [])}
+        revised.sources = [s for s in _registry_models(state.get("source_registry") or [])]
+        # Invariant: no claim may survive without at least one valid citation.
+        revised.key_developments = [
+            dev.model_copy(update={"sources": [sid for sid in dev.sources if sid in valid_ids]})
+            for dev in revised.key_developments
+            if dev.claim.strip() and any(sid in valid_ids for sid in dev.sources)
+        ]
+        revised.depth = state.get("depth") or "standard"
+        revised.reading_time_min = estimate_reading_time(_word_count(revised))
+        revised.verification = _final_verification(revised, verification)
+
+        step = {
+            "agent_name": "Reviser",
+            "action": f"Patched {len(unsupported)} unsupported claim(s) in place after verification",
+            "tools_used": ["ReportReviser"],
+        }
+        emit_event(state, "stage", stage="verified", label="Report revised and verified", pct=95)
+        return {"report": revised.model_dump(), "agent_steps": [step]}
+
+    logger.warning("Patch revision unavailable — publishing the verified draft with flags")
+    draft_out = dict(draft)
+    valid_ids = {s.get("id") for s in (state.get("source_registry") or [])}
+    # Deterministic failures are machine-checked fact: a claim with no valid
+    # citation is dropped even without a model patch. Judgement-flagged claims
+    # stay, labelled for the reader.
+    draft_out["key_developments"] = [
+        dev for dev in (draft.get("key_developments") or [])
+        if any(sid in valid_ids for sid in (dev.get("sources") or []))
+    ]
+    draft_report = coerce_report(draft_out, query=state.get("research_query", ""), depth=state.get("depth", "standard"))
+    draft_report.sources = [s for s in _registry_models(state.get("source_registry") or [])]
+    draft_report.verification = _final_verification(draft_report, verification)
+    emit_event(state, "stage", stage="verified", label="Draft published with flagged claims labelled", pct=95)
+    return {
+        "report": draft_report.model_dump(),
+        "agent_steps": [{
+            "agent_name": "Reviser",
+            "action": "Could not patch — kept the verified draft and labelled flagged claims",
+            "tools_used": [],
+        }],
     }
-    emit_event(state, "stage", stage="verified", label="Report revised and verified", pct=95)
-    return {"report": revised.model_dump(), "agent_steps": [step]}
+
+
+class ClaimPatch(BaseModel):
+    """One edit to apply to the draft's key_developments list."""
+
+    index: int = -1
+    action: str = "rewrite"  # "rewrite" | "remove"
+    claim: str = ""
+    evidence: str = ""
+
+    @field_validator("action", mode="before")
+    @classmethod
+    def _action(cls, v: Any) -> str:
+        return str(v or "rewrite").strip().lower()
+
+
+class PatchList(BaseModel):
+    revisions: list[ClaimPatch] = []
+
+
+REVISER_SYSTEM = """You are the Reviser of an autonomous research team.
+
+A verifier could not support some claims in a finished report from the sources
+they cite. For each flagged claim you return ONE patch:
+
+- action="remove": the claim goes away (nothing salvageable).
+- action="rewrite": replace it with a claim the cited evidence DOES support —
+  narrower, hedged, or re-attributed. Keep it specific and concise.
+
+Return JSON only:
+{"revisions": [{"index": 0, "action": "rewrite", "claim": "...", "evidence": "..."}]}
+`index` is the position of the flagged claim in the numbered list you receive.
+"""
+
+
+def _patch_draft(
+    state: ResearchState,
+    draft: dict[str, Any],
+    unsupported: list[dict],
+) -> dict[str, Any] | None:
+    """
+    Return a patched copy of the draft, or None when patching is impossible.
+
+    The model only ever sees and returns the flagged claims — never the whole
+    report — so the response is tiny and cannot truncate.
+    """
+    developments = draft.get("key_developments") or []
+    registry: dict[str, dict] = {s.get("id"): s for s in (state.get("source_registry") or [])}
+    meter: CostMeter | None = state.get("meter")
+
+    # Match each flagged claim to its position in the draft.
+    flagged: list[tuple[int, dict]] = []
+    for raw in unsupported:
+        probe = str(raw.get("claim", "")).strip().lower()[:100]
+        for i, dev in enumerate(developments):
+            if str(dev.get("claim", "")).strip().lower()[:100] == probe:
+                flagged.append((i, raw))
+                break
+
+    if not flagged:
+        return None
+
+    numbered = []
+    for pos, (i, raw) in enumerate(flagged):
+        dev = developments[i]
+        cited = [sid for sid in (dev.get("sources") or []) if sid in registry]
+        evidence = "\n\n".join(
+            f"[{sid}] {(registry[sid].get('quote') or '')[:600]}" for sid in cited
+        ) or "(no usable evidence)"
+        numbered.append(
+            f"{pos}. draft index {i}\nCLAIM: {dev.get('claim')}\n"
+            f"VERIFIER REASON: {raw.get('reason', '')}\nCITED EVIDENCE:\n{evidence}"
+        )
+
+    prompt = f"""Flagged claims from the report draft:
+
+{chr(10).join(numbered)}
+
+Return one patch per flagged claim, using its position as `index`."""
+    try:
+        patches = call_json(
+            get_llm(temperature=0.2, tier="smart"),
+            system=REVISER_SYSTEM,
+            user=prompt,
+            schema=PatchList,
+            meter=meter,
+            label="reviser_patch",
+            schema_hint='{"revisions": [{"index": 0, "action": "rewrite", "claim": "...", "evidence": "..."}]}',
+        )
+    except JsonCallError as exc:
+        logger.warning("Reviser patch call failed: %s", exc)
+        return None
+
+    patched_devs = [dict(dev) for dev in developments]
+    valid_ids = {s.get("id") for s in (state.get("source_registry") or [])}
+    for rev in patches.revisions:
+        if not 0 <= rev.index < len(patched_devs):
+            continue
+        if rev.action == "remove":
+            patched_devs[rev.index] = None  # type: ignore[assignment]
+        else:
+            new_claim = rev.claim.strip() or str(patched_devs[rev.index].get("claim", ""))
+            patched_devs[rev.index] = {
+                **patched_devs[rev.index],
+                "claim": new_claim,
+                "evidence": rev.evidence.strip() or patched_devs[rev.index].get("evidence", ""),
+                "sources": [sid for sid in patched_devs[rev.index].get("sources") or [] if sid in valid_ids],
+                "confidence": "revised",
+            }
+    draft_out = {**draft, "key_developments": [d for d in patched_devs if d]}
+    return draft_out
 
 
 def _generate(
     state: ResearchState,
     *,
-    revise: bool,
-    draft: dict[str, Any] | None = None,
-    unsupported: list[dict] | None = None,
+    strict: bool = False,
 ) -> ResearchReportV2:
     """Call the writer model and return a schema-valid report."""
     query = (state.get("research_query") or "").strip()
@@ -188,37 +347,34 @@ Reminder: cite source ids inside key_developments[].sources and timeline[].sourc
 Do not output a `sources` array — it is attached automatically from the registry above.
 """
 
-    if revise and draft is not None:
-        prompt += f"""
-
-YOUR PREVIOUS DRAFT
-{_compact_json(draft)}
-
-A claim-level verifier could NOT support these claims from the evidence:
-{_compact_json(unsupported)}
-
-Rewrite the report so that:
-- Each flagged claim is either removed, softened to what the evidence supports,
-  or re-attributed to a source that genuinely backs it.
-- Unresolved uncertainty is moved into risks_and_uncertainty (and open_questions).
-- Everything else that was already supported stays as it was — do not rewrite
-  the good parts.
-"""
-
     llm = get_llm(temperature=0.35, tier="smart")
-    label = "writer_revision" if revise else "writer"
-    try:
-        response = invoke_llm(llm, [SystemMessage(content=WRITER_SYSTEM), HumanMessage(content=prompt)], meter=meter, label=label)
-        content = response.content
-        if isinstance(content, list):
-            content = "".join(b.get("text", "") if isinstance(b, dict) else str(b) for b in content)
-        raw = json_object_from(str(content))
-    except JsonCallError as exc:
-        logger.error("Writer produced no usable JSON (%s)", exc)
-        raw = {}
-    except Exception as exc:  # noqa: BLE001 — LLM/network failures degrade to an empty report
-        logger.error("Writer call failed: %s", exc)
-        raw = {}
+    label = "writer"
+    last_error: Exception | None = None
+    raw: dict[str, Any] = {}
+    for attempt in (1, 2):
+        nudge = (
+            "\n\nCRITICAL: Your previous response could not be parsed as JSON. "
+            "Return ONLY the raw JSON object — start with { and end with }. "
+            "No prose, no markdown fence. Keep every string value concise so the "
+            "response fits in the output limit."
+            if attempt == 2 or strict
+            else ""
+        )
+        try:
+            response = invoke_llm(llm, [SystemMessage(content=WRITER_SYSTEM), HumanMessage(content=prompt + nudge)], meter=meter, label=label if attempt == 1 else f"{label}_retry")
+            content = response.content
+            if isinstance(content, list):
+                content = "".join(b.get("text", "") if isinstance(b, dict) else str(b) for b in content)
+            raw = json_object_from(str(content))
+            break
+        except JsonCallError as exc:
+            last_error = exc
+            logger.error("Writer produced no usable JSON (attempt %d): %s", attempt, exc)
+        except Exception as exc:  # noqa: BLE001 — LLM/network failures degrade to an empty report
+            last_error = exc
+            logger.error("Writer call failed (attempt %d): %s", attempt, exc)
+    if raw == {} and last_error is not None:
+        logger.error("Writer giving up after retries: %s", last_error)
 
     report = coerce_report(raw, query=query, depth=depth)
     report.depth = depth if depth in {"brief", "standard", "deep"} else "standard"
@@ -240,6 +396,27 @@ def _registry_models(registry: list[dict]) -> list:
     from schemas.report import Source
 
     return [Source.model_validate(s) for s in registry]
+
+
+def _is_empty(report: ResearchReportV2) -> bool:
+    """True when the report carries no usable content (only the shell)."""
+    return (
+        not report.key_developments
+        and not report.tldr
+        and not report.executive_summary.strip()
+        and not report.background_primer.strip()
+        and not report.technical_explainer.strip()
+    )
+
+
+def _is_empty_report_dict(draft: dict[str, Any]) -> bool:
+    return not (
+        draft.get("key_developments")
+        or draft.get("tldr")
+        or str(draft.get("executive_summary") or "").strip()
+        or str(draft.get("background_primer") or "").strip()
+        or str(draft.get("technical_explainer") or "").strip()
+    )
 
 
 def _final_verification(report: ResearchReportV2, verification: dict[str, Any]) -> Verification:

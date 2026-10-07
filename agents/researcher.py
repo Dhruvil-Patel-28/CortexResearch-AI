@@ -18,7 +18,7 @@ anything critical is missing and runs one more targeted round if so.
 from __future__ import annotations
 
 import logging
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
@@ -114,15 +114,34 @@ def researcher_node(state: ResearchState) -> dict:
                 tasks.append((idx, "web", web_query.strip()))
 
     results: dict[tuple[int, str, str], list[dict]] = {}
+    tasks_per_sq: dict[int, int] = {}
+    for idx, _, _ in tasks:
+        tasks_per_sq[idx] = tasks_per_sq.get(idx, 0) + 1
+    done_per_sq: dict[int, int] = {idx: 0 for idx in tasks_per_sq}
+    n_sq = len(sub_questions)
+
+    # Threads run the sub-questions *in parallel*; as each sub-question's
+    # retrieval tasks finish we emit a progress event so the live run view
+    # shows movement instead of a silent planner screen.
     with ThreadPoolExecutor(max_workers=6) as executor:
         futures = {executor.submit(_run_task, kind, q): (idx, kind, q) for idx, kind, q in tasks}
-        for future in futures:
+        for future in as_completed(futures):
             key = futures[future]
             try:
-                results[key] = future.result(timeout=45)
+                results[key] = future.result(timeout=60)
             except Exception as e:  # noqa: BLE001
-                logger.warning("task timed out %s: %s", key[1], e)
+                logger.warning("task failed/timed out %s: %s", key[1], e)
                 results[key] = []
+            done_per_sq[key[0]] = done_per_sq.get(key[0], 0) + 1
+            if done_per_sq[key[0]] == tasks_per_sq.get(key[0], 1):
+                sq_question = (sub_questions[key[0]].get("question") or query)[:60]
+                emit_event(
+                    state,
+                    "stage",
+                    stage="gathering",
+                    label=f"Sub-question {key[0] + 1}/{n_sq} searched — {sq_question}",
+                    pct=15 + int(14 * sum(done_per_sq.values()) / max(len(tasks), 1)),
+                )
 
     tool_counts = {
         "radar_store": sum(len(v) for k, v in results.items() if k[1] == "store"),
