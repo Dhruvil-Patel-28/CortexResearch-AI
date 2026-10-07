@@ -26,13 +26,10 @@ class Settings(BaseSettings):
     max_tokens_fast: int = Field(default=2048, description="Max output tokens for the fast tier")
 
     # RAG Configuration
-    data_path: str = Field(default="data", description="Path to document directory")
-    index_path: str = Field(default="faiss_index", description="Path to FAISS index directory")
     embedding_model: str = Field(default="all-MiniLM-L6-v2", description="HuggingFace embedding model")
-    chunk_size: int = Field(default=1000, description="Text chunk size for splitting")
-    chunk_overlap: int = Field(default=200, description="Text chunk overlap")
-    retriever_k: int = Field(default=4, description="Number of documents to retrieve")
-    relevance_score_threshold: float = Field(default=0.35, description="Minimum similarity score (0-1) to include a document")
+    rag_index_dir: str = Field(default="data/rag", description="Directory for the dense FAISS index")
+    rag_rerank: bool = Field(default=True, description="Rerank fused retrieval candidates with a cross-encoder")
+    rag_rerank_model: str = Field(default="cross-encoder/ms-marco-MiniLM-L-6-v2", description="Cross-encoder rerank model")
 
     # API Configuration
     api_host: str = Field(default="0.0.0.0", description="FastAPI host")

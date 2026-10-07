@@ -1,12 +1,15 @@
 """
-RAG retrieval tool with citation tracking and relevance filtering.
+RAG retrieval tool over the knowledge base of *published research briefs*.
 
-- `rag_results(query) -> list[dict]` : structured, threshold-filtered hits
+- `rag_results(query) -> list[dict]` : structured hits from past reports
 - `rag_tool(query) -> str`           : formatted text for prompt-based callers
 
-Only documents above the configured similarity threshold are returned, which is
-what keeps irrelevant citations out of the final report.
+The knowledge base used to be a stale prebuilt PDF index; it now indexes every
+brief the report engine has produced (via the hybrid retriever), so follow-up
+questions build on your own past research.
 """
+
+from __future__ import annotations
 
 import logging
 
@@ -15,35 +18,26 @@ logger = logging.getLogger(__name__)
 
 def rag_results(query: str, k: int | None = None) -> list[dict]:
     """
-    Retrieve relevant chunks from the internal knowledge base.
+    Retrieve relevant past reports from the knowledge base.
 
     Returns:
-        [{"title", "url", "snippet", "score"}] — empty when nothing clears the
-        relevance threshold or the index is unavailable.
+        [{"title", "url", "snippet", "score"}] — empty when nothing matches or
+        the index is unavailable.
     """
     try:
-        from rag.vector_store import search_with_relevance
+        from rag.retriever import get_retriever
 
-        results = search_with_relevance(query, k=k) if k else search_with_relevance(query)
-        if not results:
-            logger.info("No knowledge-base documents above threshold for: %s", query[:60])
-            return []
-
-        hits: list[dict] = []
-        for doc, score in results:
-            meta = doc.metadata or {}
-            source = meta.get("source_file") or meta.get("source") or "Knowledge base"
-            page = meta.get("page")
-            hits.append(
-                {
-                    "title": f"{source}" + (f" (p. {page})" if page not in (None, "N/A") else ""),
-                    "url": str(meta.get("url") or ""),
-                    "snippet": (doc.page_content or "").strip(),
-                    "score": float(score),
-                }
-            )
-        logger.info("Knowledge base returned %d chunks for: %s", len(hits), query[:60])
-        return hits
+        hits = get_retriever().search(query, k=k or 6, kinds=("brief",))
+        logger.info("Knowledge base returned %d briefs for: %s", len(hits), query[:60])
+        return [
+            {
+                "title": h["title"],
+                "url": h["url"],
+                "snippet": h["snippet"],
+                "score": float(h["score"]),
+            }
+            for h in hits
+        ]
     except Exception as e:  # noqa: BLE001 — index missing/corrupt must not kill a run
         logger.warning("Knowledge base retrieval unavailable for '%s': %s", query[:60], e)
         return []

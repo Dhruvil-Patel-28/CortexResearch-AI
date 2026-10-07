@@ -58,9 +58,10 @@ async def lifespan(app: FastAPI):
 
 
 def _warmup_resources():
-    """Pre-load embedding model and vector store into cache."""
-    from rag.vector_store import get_vector_store
-    get_vector_store()
+    """Pre-load the hybrid retriever (embedding model + index refresh)."""
+    from rag.retriever import get_retriever
+
+    get_retriever().ensure_index()
 
 
 app = FastAPI(
