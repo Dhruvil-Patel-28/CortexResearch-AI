@@ -3,8 +3,10 @@ Personalized relevance ranker.
 
 Two-stage pipeline designed to keep LLM cost near zero on repeat runs:
 1. Prefilter (free): mute-list, cache (profile version), recency cap.
-2. LLM scoring (fast tier): batched structured output, only for items that
-   were never scored under the current profile version.
+2. Scoring: with S1 enabled, a calibrated System 1 router decides relevance
+   per item (no text generation); the "why this matters to you" rationale is
+   generated lazily, only for items that clear the relevance threshold.
+   With S1 disabled, the legacy fast-tier batched LLM scoring runs unchanged.
 
 The scorer writes a "why this matters to you" rationale — the headline
 feature of the Pulse feed.
@@ -18,11 +20,14 @@ from pydantic import BaseModel, Field
 
 from store import db
 from utils.config import settings
+from utils.llm import get_llm
+from utils.system1 import S1Request, get_router
 from watch.profile import Profile, load_profile
 
 logger = logging.getLogger(__name__)
 
 BATCH_SIZE = 8
+RATIONALE_THRESHOLD = 6.0  # 0-10 scale; below this, no chat call is made
 
 
 class ScoredItem(BaseModel):
@@ -38,6 +43,12 @@ class BatchScores(BaseModel):
     """Structured output for a batch of items."""
 
     scores: list[ScoredItem]
+
+
+class Rationale(BaseModel):
+    """Lazy rationale for one already-scored item."""
+
+    rationale: str = Field(description="One sentence written to the reader ('you') explaining why this matters for their goals or stack")
 
 
 SCORER_PROMPT = """You score tech-news and research items for how much they matter to ONE specific reader.
@@ -103,6 +114,61 @@ def score_batch(llm_structured, profile: Profile, items: list[dict]) -> list[dic
     return out
 
 
+def _s1_context(item: dict) -> str:
+    text = (item.get("raw_text") or "").strip().replace("\n", " ")[:400]
+    return f"{item.get('title', '')}\n{text or '(no description)'}"
+
+
+def rationale_for(item: dict, profile: Profile, relevance: float) -> str:
+    """Generate the 'why this matters to you' line for one item (fast tier)."""
+    llm = get_llm(temperature=0.0, tier="fast")
+    structured = llm.with_structured_output(Rationale)
+    prompt = (
+        f"{profile.prompt_block()}\n\n"
+        f"An item scored {relevance:.1f}/10 for this reader:\n"
+        f"{_s1_context(item)}\n\n"
+        "Write the one-sentence rationale TO the reader ('you ...') saying WHY "
+        "this matters for their goals or stack. Never restate the title."
+    )
+    result: Rationale = structured.invoke(prompt)
+    return result.rationale.strip()
+
+
+def score_batch_s1(items: list[dict], profile: Profile) -> list[dict]:
+    """Score items through the System 1 router (one calibrated decision each)."""
+    router = get_router()
+    hint = profile.prompt_block()[:500]
+    out: list[dict] = []
+    for item in items:
+        decision = router.decide(
+            S1Request(
+                task="relevance",
+                context=_s1_context(item),
+                options=["low", "high"],
+                profile_hint=hint,
+            )
+        )
+        relevance = round(decision.score * 10, 1)
+        rationale = ""
+        if relevance >= RATIONALE_THRESHOLD:
+            try:
+                rationale = rationale_for(item, profile, relevance)
+            except Exception as e:  # noqa: BLE001 — rationale is best-effort
+                logger.warning("Rationale generation failed: %s", e)
+        out.append(
+            {
+                "item_id": item["id"],
+                "topic_id": "general",
+                "relevance": relevance,
+                "rationale": rationale,
+                "tags": [],
+                "model": f"s1:{decision.backend}",
+                "profile_version": profile.version,
+            }
+        )
+    return out
+
+
 def score_unscored(limit: int | None = None, progress=None) -> dict:
     """
     Score all not-yet-scored items (under the current profile version).
@@ -144,6 +210,31 @@ def score_unscored(limit: int | None = None, progress=None) -> dict:
 
     if not fresh:
         return {"scored": 0, "skipped_cached": skipped_cached, "skipped_muted": skipped_muted, "batches": 0, "errors": 0}
+
+    if settings.s1_enabled:
+        scored = 0
+        errors = 0
+        for item in fresh:
+            try:
+                rows = score_batch_s1([item], load_profile())
+                db.save_scores(rows)
+                scored += len(rows)
+                _emit("score_batch_done", {"scored": scored, "of": len(fresh)})
+            except Exception as e:  # noqa: BLE001 — one bad item must not kill the run
+                errors += 1
+                logger.warning(f"S1 scoring failed for item: {e}")
+        result = {
+            "scored": scored,
+            "skipped_cached": skipped_cached,
+            "skipped_muted": skipped_muted,
+            "batches": len(fresh),
+            "errors": errors,
+            "profile_version": load_profile().version,
+            "model": "s1-router",
+        }
+        logger.info(f"Scoring done: {result}")
+        _emit("score_done", result)
+        return result
 
     llm = get_llm(temperature=0.0, tier="fast")
     structured = llm.with_structured_output(BatchScores)
