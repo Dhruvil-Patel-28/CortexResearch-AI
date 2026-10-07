@@ -66,6 +66,14 @@ class Settings(BaseSettings):
     llm_score_k: int = Field(default=25, description="Max items scored by the LLM per run")
     min_display_score: float = Field(default=5.0, description="Minimum LLM relevance (0-10) shown in the UI")
 
+    # System 1 / System 2 routing (fast calibrated decisions + chat-tier escalation)
+    s1_enabled: bool = Field(default=True, description="Route fast decisions through the System 1 router")
+    jev_api_key: str = Field(default="", description="Jev (TypeSafe AI) API key; empty skips Jev and uses the local fallback")
+    jev_base_url: str = Field(default="https://api.typesafe.ai/v1", description="Jev API base URL")
+    jev_model: str = Field(default="jev-1", description="Jev model identifier")
+    s1_confidence_threshold: float = Field(default=0.75, ge=0.0, le=1.0, description="S1 decisions below this confidence escalate to S2")
+    s1_escalation_tier: str = Field(default="fast", description="Chat tier used for S2 escalation")
+
     # Scheduler & digests
     schedule_interval_minutes: int = Field(default=240, description="Minutes between ingest+score cycles")
     digest_hour: int = Field(default=8, description="Hour of day (local time) the daily digest is built")
