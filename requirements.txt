@@ -9,12 +9,8 @@ langchain-community>=0.3.0
 langchain-anthropic>=0.3.0
 langgraph>=0.2.0
 
-# --- Embeddings & Vector Store ---
+# --- Embeddings & Retrieval ---
 sentence-transformers>=2.2.0
-faiss-cpu>=1.7.4
-
-# --- Document Processing ---
-pypdf>=3.0.0
 
 # --- Web Search ---
 ddgs>=9.0.0
@@ -34,9 +30,6 @@ uvicorn[standard]>=0.27.0
 pydantic>=2.0.0
 pydantic-settings>=2.0.0
 python-dotenv>=1.0.0
-
-# --- Text Processing ---
-langchain-text-splitters>=0.3.0
 
 # --- Dev / Test ---
 pytest>=8.0.0

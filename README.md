@@ -1,176 +1,132 @@
-# 🔬 CortexResearch AI — Autonomous Multi-Agent Research Pipeline
+# CortexResearch — Market Pulse Radar + Deep-Research Engine
 
-A **multi-agent AI research pipeline** that autonomously gathers, analyzes, and synthesizes information into structured research reports. Built with LangChain, LangGraph, and FastAPI.
+A personal, daily-use research workbench: it continuously pulls what's new across the
+tech/market landscape, ranks it **against your interests** with a "why this matters to
+you" line, and produces **detailed, verified, cited reports** — detailed enough that
+you don't need to do manual follow-up research.
 
-## 🏗️ Architecture
+Not a chatbot wrapper. A pipeline: free multi-source ingestion → personalized ranking →
+multi-hop research → claim-level verification → editorial reporting, with a live-streamed
+agent timeline in the browser and a searchable library of everything you've ever saved.
 
-The system supports two execution modes:
+## What it does day to day
 
-### Active: Static Pipeline (Optimized)
-```
-User Query
-    ↓
-┌───────────────────────┐
-│   🔍 Researcher       │  ← Gathers information
-│   Tools (parallel):   │     - Web Search (DuckDuckGo)
-│   - WebSearch         │     - Knowledge Base (FAISS + RAG)
-│   - RAG Retriever     │
-└───────────┬───────────┘
-            ↓
-┌───────────────────────┐
-│   📊 Analyzer         │  ← Synthesizes findings
-│   - Key findings      │     - Pattern detection
-│   - Gap analysis      │     - Contradiction flagging
-│   - Confidence ratings│
-└───────────┬───────────┘
-            ↓
-┌───────────────────────┐
-│   ✍️ Writer            │  ← Generates final report
-│   - Structured JSON   │     - Title, Summary, Findings
-│   - Citations         │     - Analysis, Recommendations
-└───────────┬───────────┘
-            ↓
-    📋 Structured Research Report
-```
+1. **Pulse** (`/`) — everything genuinely new since your last visit, pulled from Hacker
+   News, arXiv, RSS/blogs, Reddit, GitHub trending and Product Hunt, deduplicated and
+   clustered across sources, then ranked by an LLM scorer that writes a personalized
+   rationale per story.
+2. **Deep brief** — click any story (or ask any question on `/research`) and watch the
+   agent run live: planner → multi-hop researcher → writer → verifier → reviser. The
+   final report follows a strict schema: TL;DR, executive summary, zero-prior-knowledge
+   primer, key developments with per-claim citations and confidence, timeline,
+   implications, risks, FAQ, glossary — plus a verification panel showing which claims
+   were supported and which the reviser had to flag or remove.
+3. **Digests** (`/digests`) — an LLM-free daily briefing assembled from top-scored
+   stories (the intelligence was spent at ranking time), a "what changed since last
+   digest" delta section computed from data (re-heated clusters = stories that came back
+   with new sources or higher relevance), and one-click **delta briefs**: a full research
+   run anchored on "what changed in X since [date]".
+4. **Library** (`/library`) — hybrid search (BM25 + embeddings + cross-encoder rerank)
+   over every ingested source and every published report, with optional GraphRAG for
+   multi-hop "how do X and Y connect" questions.
 
-### Alternative: Dynamic Supervisor Mode (available, commented out)
-```
-User Query → Supervisor → Researcher → Supervisor → Analyzer → Supervisor → Writer → FINISH
-```
-The supervisor-based approach uses an LLM to dynamically route between agents. It's more flexible but has higher cost and latency. Can be re-enabled in `research_agent.py` for complex queries.
-
-## ✨ Features
-
-- **Multi-Agent Orchestration** — LangGraph `StateGraph` with static pipeline (Researcher → Analyzer → Writer) and optional dynamic supervisor routing
-- **RAG Pipeline** — PDF document ingestion → chunking → FAISS vector indexing → semantic retrieval with relevance-score filtering and page-level citations
-- **Web Search Integration** — Real-time DuckDuckGo search via [`ddgs`](https://github.com/deedy5/duckduckgo_search) with source attribution
-- **Parallel Tool Execution** — RAG search and web search run concurrently via `ThreadPoolExecutor` for faster information gathering
-- **Performance Optimized** — Singleton caching for embedding models, FAISS index, and LLM instances; server-startup warmup to eliminate cold-start latency
-- **Conversation Memory** — Session-based memory for multi-turn research conversations
-- **Structured Output** — JSON research reports with title, summary, key findings, analysis, and recommendations
-- **Citation Tracking** — Source document names, page numbers, relevance scores, and content snippets attached to every report
-- **Async API** — FastAPI with async endpoints and typed Pydantic request/response models
-- **Professional UI** — Streamlit chat interface with expandable report sections and execution trace
-
-## ⚡ Performance
-
-Optimized pipeline with singleton caching and parallel execution:
-
-| Stage | Description | Time |
-|-------|-------------|------|
-| Startup warmup | Embedding model + FAISS index load (one-time) | ~11s |
-| RAG + Web Search | Run in parallel via ThreadPoolExecutor | ~4s |
-| LLM calls (×3) | Researcher → Analyzer → Writer | ~3s |
-| **Total per request** | **After startup warmup** | **~7s** |
-
-Key optimizations:
-- **Embedding model cached** as module-level singleton (avoids ~9s reload per request)
-- **FAISS index cached** after first load (avoids ~6s reload per request)
-- **LLM instances cached** by temperature parameter
-- **RAG + Web search parallelized** (saves ~5s vs sequential execution)
-- **Server-startup warmup** pre-loads all heavy resources before first request
-
-## 📁 Project Structure
+## Architecture
 
 ```
-CortexResearch-AI/
-├── agents/
-│   ├── state.py              # Shared state definition (TypedDict)
-│   ├── supervisor.py         # Planner/router agent (optional, commented out)
-│   ├── researcher.py         # Information gathering agent (parallel tools)
-│   ├── analyzer.py           # Analysis & synthesis agent
-│   ├── writer.py             # Report generation agent
-│   └── research_agent.py     # LangGraph pipeline orchestrator
-├── api/
-│   ├── main.py               # FastAPI app (async endpoints + warmup)
-│   └── models.py             # Pydantic request/response models
-├── tools/
-│   ├── web_search.py         # DuckDuckGo search via ddgs
-│   ├── rag_tool.py           # RAG retrieval with relevance filtering
-│   └── summarizer.py         # Structured summarizer
-├── rag/
-│   └── vector_store.py       # FAISS vector store (singleton cached)
-├── utils/
-│   ├── llm.py                # LLM factory with instance caching
-│   ├── config.py             # Centralized configuration (Pydantic Settings)
-│   └── memory.py             # Session memory manager
-├── ui/
-│   └── app.py                # Streamlit chat UI
-├── data/                     # PDF documents for RAG
-├── faiss_index/              # Persisted FAISS index
-├── .env.example              # Environment variable template
-├── requirements.txt          # Python dependencies
-└── README.md
+Free sources (HN · arXiv · RSS · Reddit · GitHub · Product Hunt)
+        │  adapters with timeout/retry/failure isolation
+        ▼
+Ingest → dedup → cluster → SQLite store (WAL)
+        │
+        ▼
+Ranker: cheap prefilter → LLM score (structured output) → score cache
+        │  zero LLM calls on cached reruns
+        ▼
+┌───────────────────────── Engine (FastAPI + LangGraph) ─────────────────────────┐
+│ Planner → Researcher (multi-hop tool loop) → Writer → Verifier → Reviser       │
+│ Retrieval: SQLite FTS5 BM25 ⊕ sentence-transformers dense, RRF-fused,          │
+│            cross-encoder rerank, content-addressed auto re-index               │
+│ Optional (flagged): LightRAG graph queries · Supermemory local                 │
+│ SSE job streaming: plan / tools / sources / verification / token events        │
+└────────────────────────────────────────────────────────────────────────────────┘
+        │
+        ▼
+Next.js 16 UI (App Router, Tailwind v4): Pulse · Research · Live run view ·
+Report reader (TOC, citation chips, confidence badges) · Digests · Library
+        │
+Scheduler worker (APScheduler): ingest+score cycle → daily digest → delivery (file/Slack)
 ```
 
-## 🚀 Quick Start
+**Everywhere, degradation is designed in:** retrieval works if embeddings fail, reports
+ship if the reviser fails, digests never depend on an LLM, and GraphRAG/Supermemory are
+feature flags the app never hard-depends on.
 
-### 1. Clone & Setup
+## Engineering highlights
+
+- **Claim-level verification** — the verifier checks every claim's citations
+  deterministically first (missing/unknown source id → unsupported, no LLM call), then a
+  fast-model pass; the reviser is authoritative for the final `verification` block.
+- **Report schema v2 with self-healing parsing** — LLM output is remapped through field
+  aliases and salvaged per-entry, so one malformed row can't kill a whole report.
+- **Hybrid retrieval over your own corpus** — FTS5 BM25 fused with exact cosine search
+  over MiniLM vectors (numpy at personal-store scale — no faiss/torch OpenMP conflicts),
+  reranked by a cross-encoder; the index is content-addressed and rebuilds itself when
+  the store changes.
+- **Live agent timeline** — first-class SSE event types with client-side replay dedupe
+  and reconnection; no fake progress bars.
+- **Cost metering** — per-run token/cost tracking with tiered model routing (fast tier
+  for scoring/extraction, frontier tier for synthesis), surfaced on every report.
+- **Offline test suite** — 82 tests, all fixture-based: adapters, dedup, ranker caching,
+  digest boundaries, scheduler cycles, report schema, API contracts, retrieval legs.
+  No test ever hits a live API or downloads a model.
+
+## Quickstart
+
+Docker (recommended):
 
 ```bash
-git clone <your-repo-url>
-cd CortexResearch-AI
-python -m venv venv
-source venv/bin/activate      # macOS/Linux
-# venv\Scripts\activate       # Windows
-pip install -r requirements.txt
+cp .env.example .env          # set ANTHROPIC_API_KEY
+docker compose up --build
+# Pulse:        http://localhost:3000
+# API docs:     http://localhost:8000/docs
 ```
 
-### 2. Configure Environment
+Local dev:
 
 ```bash
-cp .env.example .env
-# Edit .env and add your Anthropic API key
+python -m venv venv && ./venv/bin/pip install -r requirements.txt
+cp .env.example .env          # set ANTHROPIC_API_KEY
+./venv/bin/uvicorn api.main:app --port 8000
+
+cd web && npm install && npm run dev   # http://localhost:3001
 ```
 
-### 3. Add Documents (Optional)
-
-Place PDF files in the `data/` directory. The system will automatically ingest and index them on first run.
-
-### 4. Start the API Server
+Optional: run the scheduler worker for automatic ingest cycles and the daily digest:
 
 ```bash
-uvicorn api.main:app --reload
+./venv/bin/python -m watch.scheduler
 ```
 
-### 5. Start the UI
+Configuration is env-driven (models, schedule, digest thresholds, source knobs) — see
+`.env.example`. Interests live in a profile (keywords, stack, goals, boosts, mutes),
+editable at `/topics`.
 
-```bash
-streamlit run ui/app.py
+## Project structure
+
+```
+sources/        feed adapters (HN, arXiv, RSS, Reddit, GitHub, Product Hunt) + base class
+store/          SQLite persistence: items, scores, briefs, digests, jobs, settings
+watch/          profile, ranker, dedup/clustering, digest builder, scheduler
+rag/            hybrid retriever (BM25 + dense + rerank) + optional GraphRAG adapter
+memory/         optional Supermemory client (flagged, graceful fallback)
+agents/         planner / researcher / writer / verifier / reviser pipeline + jobs
+schemas/        report schema v2 (alias remapping + per-entry salvage)
+api/            FastAPI routes: /watch, /research (+SSE), /digests, /search, /health
+web/            Next.js 16 frontend (App Router, Tailwind v4)
+tests/          82 offline tests over fixtures
 ```
 
-Open http://localhost:8501 in your browser and start researching!
+## Status
 
-## 🔧 API Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/health` | Health check |
-| `POST` | `/research` | Execute research pipeline |
-| `GET` | `/sessions/{id}/history` | Get conversation history |
-
-### Example Request
-
-```bash
-curl -X POST http://localhost:8000/research \
-  -H "Content-Type: application/json" \
-  -d '{"query": "What are the latest advances in fraud detection using ML?", "session_id": "my-session-1"}'
-```
-
-## 🛠️ Tech Stack
-
-| Component | Technology |
-|-----------|------------|
-| LLM | Anthropic Claude (via LangChain) |
-| Agent Framework | LangGraph StateGraph |
-| Vector Store | FAISS (singleton cached) |
-| Embeddings | HuggingFace `all-MiniLM-L6-v2` |
-| API | FastAPI (async) |
-| UI | Streamlit |
-| Web Search | DuckDuckGo (`ddgs`) |
-| Configuration | Pydantic Settings |
-
-## 👤 Author
-
-**Dhruvil Patel**  
-[GitHub](https://github.com/Dhruvil-Patel-28)
+Actively developed. Roadmap: trends/momentum view, command palette, email delivery,
+NotebookLM-style audio briefings.
