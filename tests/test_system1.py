@@ -76,3 +76,53 @@ def test_jev_timeout_raises() -> None:
 
     with pytest.raises(JevError):
         _client(httpx.MockTransport(handler), timeout_s=0.05).decide(_request())
+
+
+# ── LocalCalibratedBackend ────────────────────────────────────────────
+
+from utils.system1 import LocalCalibratedBackend  # noqa: E402
+
+TECH = ["kubernetes cluster autoscaling devops pipeline", "devops observability kubernetes rollout",
+        "kubernetes operator devops incident", "terraform kubernetes devops deploy"]
+NOT_TECH = ["celebrity recipe pasta dinner", "recipe for celebrity bake off",
+            "celebrity chef recipe show", "pasta recipe celebrity kitchen"]
+
+
+def _fitted_backend(options: list[str]) -> LocalCalibratedBackend:
+    backend = LocalCalibratedBackend()
+    rows = [(t, 9.0) for t in TECH] + [(t, 2.0) for t in NOT_TECH]
+    backend.fit(rows)
+    assert options  # keep options in scope for readability
+    return backend
+
+
+def test_local_backend_untrained_returns_neutral() -> None:
+    backend = LocalCalibratedBackend()
+    decision = backend.decide(_request())
+    assert decision.label == "low"
+    assert decision.score == pytest.approx(0.5)
+    assert decision.confidence == 0.0
+    assert decision.backend == "local"
+
+
+def test_local_backend_learns_keyword_split() -> None:
+    backend = _fitted_backend(["low", "high"])
+    tech = backend.decide(S1Request(task="relevance", context=TECH[0], options=["low", "high"]))
+    not_tech = backend.decide(S1Request(task="relevance", context=NOT_TECH[0], options=["low", "high"]))
+    assert tech.score > not_tech.score
+    assert tech.score > 0.7
+    assert not_tech.score < 0.3
+    assert tech.confidence > 0 and not_tech.confidence > 0
+
+
+def test_local_backend_respects_options_order() -> None:
+    backend = _fitted_backend(["low", "high"])
+    assert backend.decide(S1Request(task="t", context=TECH[0], options=["low", "high"])).label == "high"
+    assert backend.decide(S1Request(task="t", context=NOT_TECH[0], options=["low", "high"])).label == "low"
+
+
+def test_local_backend_undertrained_stays_neutral() -> None:
+    backend = LocalCalibratedBackend()
+    backend.fit([("kubernetes devops", 9.0), ("celebrity recipe", 2.0)])  # 2 rows < 5
+    decision = backend.decide(S1Request(task="t", context="kubernetes", options=["low", "high"]))
+    assert decision.confidence == 0.0

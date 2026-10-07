@@ -13,7 +13,10 @@ import time
 from typing import Protocol
 
 import httpx
+import numpy as np
 from pydantic import BaseModel, Field
+
+from utils.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -114,4 +117,68 @@ class JevBackend:
             confidence=float(confidence),
             backend="jev",
             latency_ms=latency_ms,
+        )
+
+
+# ── Local calibrated fallback ──────────────────────────────────────────
+
+_ST_MODEL: object | None = None
+
+
+def _embed(texts: list[str]) -> np.ndarray:
+    """Embed texts with the same MiniLM model the RAG dense leg uses."""
+    global _ST_MODEL
+    if _ST_MODEL is None:
+        from sentence_transformers import SentenceTransformer
+
+        _ST_MODEL = SentenceTransformer(settings.embedding_model)
+    return _ST_MODEL.encode(  # type: ignore[attr-defined]
+        texts, normalize_embeddings=True, show_progress_bar=False
+    )
+
+
+class LocalCalibratedBackend:
+    """Logistic regression over MiniLM embeddings, trained on score history.
+
+    Offline System 1: no API, no heavy deps. Undertrained → neutral decisions
+    (confidence 0.0) so the router escalates instead of trusting a guess.
+    """
+
+    def __init__(self) -> None:
+        self._w: np.ndarray | None = None
+        self._b = 0.0
+
+    def fit(self, rows: list[tuple[str, float]]) -> None:
+        """rows = (text, relevance 0-10). ≥7 → positive, ≤4 → negative."""
+        labeled = [(t, 1.0) for t, r in rows if r >= 7.0] + [(t, 0.0) for t, r in rows if r <= 4.0]
+        if len(labeled) < 5:
+            logger.info("S1 local backend undertrained (%d labeled rows) — staying neutral", len(labeled))
+            self._w = None
+            return
+        texts = np.array([t for t, _ in labeled])
+        y = np.array([v for _, v in labeled])
+        x = _embed(list(texts))
+        w = np.zeros(x.shape[1], dtype=np.float64)
+        b = 0.0
+        for _ in range(300):
+            p = 1.0 / (1.0 + np.exp(-(x @ w + b)))
+            w -= 0.5 * (x.T @ (p - y) / len(y) + 1e-3 * w)
+            b -= 0.5 * float(np.mean(p - y))
+        self._w, self._b = w, b
+
+    def decide(self, request: S1Request) -> Decision:
+        started = time.monotonic()
+        if self._w is None:
+            return Decision(
+                label=request.options[0], score=0.5, confidence=0.0, backend="local", latency_ms=0
+            )
+        (vec,) = _embed([request.context])
+        p = float(1.0 / (1.0 + np.exp(-(vec @ self._w + self._b))))
+        label = request.options[1] if p >= 0.5 else request.options[0]
+        return Decision(
+            label=label,
+            score=p,
+            confidence=abs(p - 0.5) * 2,
+            backend="local",
+            latency_ms=int((time.monotonic() - started) * 1000),
         )
