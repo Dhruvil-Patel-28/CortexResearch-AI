@@ -36,6 +36,9 @@ def sanitize_content(text: str) -> tuple[str, dict]:
         if report.action == "strip":
             clean = _neutralize(clean)
 
+    from guardrails import trace
+
+    trace.record_content(summary)
     return clean, summary
 
 

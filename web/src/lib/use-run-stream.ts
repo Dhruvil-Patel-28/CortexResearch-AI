@@ -24,6 +24,7 @@ const EVENT_TYPES = [
   "plan",
   "subq",
   "route",
+  "guardrail",
   "tools",
   "sources",
   "verification",

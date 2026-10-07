@@ -108,6 +108,16 @@ function buildSteps(events: RunEvent[], phase: string): Step[] {
     ? `S1 reflex${s1Backends.length ? ` (${s1Backends.join(", ")})` : ""} · ${escalations} escalation${escalations === 1 ? "" : "s"}`
     : undefined;
 
+  // Guardrails row: only appears once the run has emitted guardrail counters.
+  const guardrail = lastEvent(events, "guardrail");
+  const guardrailDetail = guardrail
+    ? `${guardrail.scanned ?? 0} content blocks scanned · ${
+        guardrail.injections_stripped ?? 0
+      } injection${(guardrail.injections_stripped ?? 0) === 1 ? "" : "s"} neutralized · ${
+        guardrail.pii_redacted ?? 0
+      } PII redaction${(guardrail.pii_redacted ?? 0) === 1 ? "" : "s"}`
+    : undefined;
+
   return [
     {
       key: "planner",
@@ -139,10 +149,20 @@ function buildSteps(events: RunEvent[], phase: string): Step[] {
       state: stateFor(3, written),
     },
     {
+      key: "guardrails",
+      label: "Guardrails",
+      detail:
+        guardrailDetail ??
+        (currentStage === "gathering" || currentStage === "reading"
+          ? "Scanning gathered content…"
+          : undefined),
+      state: stateFor(4, guardrail),
+    },
+    {
       key: "verifier",
       label: "Verifier",
       detail: [verification?.label, routingSuffix].filter(Boolean).join(" — ") || undefined,
-      state: stateFor(4, verification),
+      state: stateFor(5, verification),
     },
     {
       key: "reviser",

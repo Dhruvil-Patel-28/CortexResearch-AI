@@ -80,6 +80,12 @@ class LLMClient:
                     len(verdict.injection.findings),
                 )
                 try:
+                    from guardrails import trace
+
+                    trace.record_output(verdict.redactions, verdict.injection.risk)
+                except Exception:  # noqa: BLE001
+                    pass
+                try:
                     response.guardrails = {
                         "redactions": verdict.redactions,
                         "injection_risk": verdict.injection.risk,

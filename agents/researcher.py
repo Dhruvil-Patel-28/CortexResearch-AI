@@ -284,6 +284,20 @@ def researcher_node(state: ResearchState) -> dict:
         label=f"{len(registry)} sources registered",
         pct=50,
     )
+    from guardrails import trace as gr_trace
+
+    gr = gr_trace.snapshot()
+    emit_event(
+        state,
+        "guardrail",
+        label=(
+            f"Guardrails: {gr['scanned']} content blocks scanned · "
+            f"{int(gr['injections_stripped'])} injections neutralized · "
+            f"{int(gr['pii_redacted'])} PII redactions"
+        ),
+        pct=52,
+        **gr,
+    )
     logger.info("Researcher gathered %d sources across %d sub-questions", len(registry), len(sub_findings))
 
     step = {

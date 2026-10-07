@@ -30,6 +30,8 @@ from utils.cost import CostMeter
 from utils.memory import session_manager
 from utils.system1 import DecisionLog, get_router
 
+from guardrails import trace as guardrail_trace
+
 logger = logging.getLogger(__name__)
 
 
@@ -98,6 +100,7 @@ def run_research(
     depth = depth if depth in {"brief", "standard", "deep"} else "standard"
     meter = CostMeter()
     started = time.time()
+    gr_start = guardrail_trace.snapshot()
 
     logger.info("Research v2 starting | depth=%s | session=%s | query=%s", depth, session_id, query[:120])
     if emit:
@@ -138,7 +141,9 @@ def run_research(
             "Nothing in this report should be treated as a finding — re-run the question."
         )
         report.cost_usd = meter.total_usd
-        report.model_trace = attach_decision_trace(meter.trace(), get_router().log)
+        report.model_trace = guardrail_trace.attach_guardrail_trace(
+            attach_decision_trace(meter.trace(), get_router().log), gr_start
+        )
         return {
             "session_id": session_id,
             "report": report.model_dump(),
@@ -152,6 +157,7 @@ def run_research(
         }
 
     report = _finalise_report(final_state, query=query, depth=depth, meter=meter, started=started)
+    report.model_trace = guardrail_trace.attach_guardrail_trace(report.model_trace, gr_start)
     verification = report.verification.model_dump() if hasattr(report.verification, "model_dump") else dict(final_state.get("verification") or {})
 
     session_manager.add_interaction(session_id, query, report.executive_summary[:500] or report.title)

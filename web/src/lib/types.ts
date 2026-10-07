@@ -152,6 +152,32 @@ export interface ModelCall {
   cost_usd: number;
 }
 
+/** `guardrails` section of a dict-shaped model trace (per-run deltas). */
+export interface GuardrailTrace {
+  scanned?: number;
+  pii_redacted?: number;
+  injections_stripped?: number;
+  output_redactions?: number;
+  output_injection_risk?: number;
+}
+
+/** model_trace is either a bare call log (legacy) or a structured object. */
+export type ModelTrace = ModelCall[] | {
+  calls?: ModelCall[];
+  guardrails?: GuardrailTrace;
+  [key: string]: unknown;
+};
+
+/** Pull the model calls and guardrail section out of either trace shape. */
+export function splitModelTrace(trace: ModelTrace | undefined | null): {
+  calls: ModelCall[];
+  guardrails?: GuardrailTrace;
+} {
+  if (!trace) return { calls: [] };
+  if (Array.isArray(trace)) return { calls: trace };
+  return { calls: trace.calls ?? [], guardrails: trace.guardrails };
+}
+
 export interface Report {
   query: string;
   title: string;
@@ -172,7 +198,7 @@ export interface Report {
   sources: ReportSource[];
   verification: Verification;
   reading_time_min: number;
-  model_trace: ModelCall[];
+  model_trace: ModelTrace;
   cost_usd: number;
   created_at: string;
 }
@@ -246,6 +272,10 @@ export interface RunEvent {
   confidence?: number;
   escalated?: boolean;
   latency_ms?: number;
+  /** `guardrail` event payload (run-level guardrail counters). */
+  scanned?: number;
+  pii_redacted?: number;
+  injections_stripped?: number;
   verification?: Verification;
   report?: Report;
   brief_id?: string | null;

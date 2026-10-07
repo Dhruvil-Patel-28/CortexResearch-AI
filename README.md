@@ -70,6 +70,14 @@ feature flags the app never hard-depends on.
   trained on score history keeps the reflex alive when Jev is down, and a
   circuit breaker skips Jev after 3 consecutive failures. Every routed decision
   is visible in the run timeline and the report trace.
+- **Guardrails on untrusted content** — every scraped page, search snippet and ingested
+  item passes a prompt-injection scanner (six weighted heuristic categories, with
+  quote/third-person detection so articles *about* injection aren't flagged) and a
+  PII/secret scrubber (emails, phones, SSNs, Luhn-validated cards, API keys, JWTs).
+  Scraped evidence is framed in `<untrusted>` delimiters with an explicit
+  "data, not instructions" directive, model responses are checked on every LLM call,
+  and user queries are screened before a run starts. What was caught is visible live
+  in the run view and in the report trace.
 - **Claim-level verification** — the verifier checks every claim's citations
   deterministically first (missing/unknown source id → unsupported, no LLM call), then routes
   the remaining claims through S1, grouping low-confidence ones into a single
