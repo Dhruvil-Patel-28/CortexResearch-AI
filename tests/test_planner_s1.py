@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from agents import planner
 from utils.system1 import Decision, DecisionLog, CircuitBreaker, S1Request, S1S2Router
 

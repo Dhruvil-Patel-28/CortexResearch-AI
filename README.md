@@ -63,9 +63,17 @@ feature flags the app never hard-depends on.
 
 ## Engineering highlights
 
+- **System 1 / System 2 model routing** — every fast decision (item relevance,
+  claim support, query classification) is routed through a calibrated S1 model
+  (Jev) that returns a score, not prose. Decisions below a confidence threshold
+  escalate to the chat tier ("System 2"); a local logistic-regression fallback
+  trained on score history keeps the reflex alive when Jev is down, and a
+  circuit breaker skips Jev after 3 consecutive failures. Every routed decision
+  is visible in the run timeline and the report trace.
 - **Claim-level verification** — the verifier checks every claim's citations
-  deterministically first (missing/unknown source id → unsupported, no LLM call), then a
-  fast-model pass; the reviser is authoritative for the final `verification` block.
+  deterministically first (missing/unknown source id → unsupported, no LLM call), then routes
+  the remaining claims through S1, grouping low-confidence ones into a single
+  fast-model escalation; the reviser is authoritative for the final `verification` block.
 - **Report schema v2 with self-healing parsing** — LLM output is remapped through field
   aliases and salvaged per-entry, so one malformed row can't kill a whole report.
 - **Hybrid retrieval over your own corpus** — FTS5 BM25 fused with exact cosine search
@@ -76,8 +84,9 @@ feature flags the app never hard-depends on.
   and reconnection; no fake progress bars.
 - **Cost metering** — per-run token/cost tracking with tiered model routing (fast tier
   for scoring/extraction, frontier tier for synthesis), surfaced on every report.
-- **Offline test suite** — 82 tests, all fixture-based: adapters, dedup, ranker caching,
-  digest boundaries, scheduler cycles, report schema, API contracts, retrieval legs.
+- **Offline test suite** — 123 tests, all fixture-based: adapters, dedup, ranker caching,
+  digest boundaries, scheduler cycles, report schema, API contracts, retrieval legs,
+  S1 routing (mocked Jev transport, escalation, circuit breaker).
   No test ever hits a live API or downloads a model.
 
 ## Quickstart

@@ -44,7 +44,7 @@ def _fake_embedder(texts: list[str]) -> np.ndarray:
 
 
 def _seed_item(item_id: str, *, title: str, body: str, score: float | None = None) -> str:
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timezone
     from sources.base import FeedItem
 
     item = FeedItem(
@@ -130,7 +130,7 @@ def test_ensure_index_rebuilds_only_when_store_changes(store_db):
 
 
 def test_reranker_reorders_candidates(store_db):
-    id_close = _seed_item("close", title="Agent memory systems", body="Agent memory systems for long running tasks.")
+    _seed_item("close", title="Agent memory systems", body="Agent memory systems for long running tasks.")
     id_far = _seed_item("far", title="Agent memory systems", body="Completely unrelated filler text about gardening.")
 
     def reverse_rerank(query: str, texts: list[str]) -> list[float]:

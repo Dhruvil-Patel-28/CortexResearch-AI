@@ -110,8 +110,6 @@ def test_at_threshold_items_get_rationale(seeded_db, monkeypatch):
 
 
 def test_cache_still_prevents_llm_calls(seeded_db, monkeypatch):
-    from utils.config import settings
-
     stub = StubRouter(score=0.82)
     monkeypatch.setattr(ranker, "get_router", lambda: stub)
 
