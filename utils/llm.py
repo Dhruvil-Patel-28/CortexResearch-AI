@@ -44,15 +44,58 @@ class LLMClient:
 
     def invoke(self, messages, **kwargs):
         try:
-            return self._llm.invoke(messages, **kwargs)
+            return self._check_output(self._llm.invoke(messages, **kwargs))
         except Exception as exc:  # noqa: BLE001 — re-raised unless it is the temperature case
             if self.temperature is not None and _is_temperature_error(exc):
                 logger.warning("Model %s rejects `temperature` — retrying without it", self.model)
                 _NO_TEMPERATURE.add(self.model)
                 self.temperature = None
                 self._llm = _build(self.model, None, self.max_tokens)
-                return self._llm.invoke(messages, **kwargs)
+                return self._check_output(self._llm.invoke(messages, **kwargs))
             raise
+
+    def _check_output(self, response):
+        """
+        Guardrail check on every model response (the "every LLM call" guarantee).
+
+        Modes (settings.guardrails_llm_output): off → skip; monitor (default) →
+        log + record findings, leave content untouched; enforce → redact
+        PII/secrets in place. Findings are attached as `response.guardrails`
+        when the message object allows it.
+        """
+        if not settings.guardrails_enabled or settings.guardrails_llm_output == "off":
+            return response
+        try:
+            from guardrails.policy import check_output
+
+            content = getattr(response, "content", "")
+            text = content if isinstance(content, str) else " ".join(str(p) for p in content)
+            if not text:
+                return response
+            verdict = check_output(text)
+            if verdict.redactions or verdict.injection.findings:
+                logger.warning(
+                    "Guardrails on LLM output: pii_kinds=%s injection_findings=%d",
+                    [r["kind"] for r in verdict.redactions],
+                    len(verdict.injection.findings),
+                )
+                try:
+                    response.guardrails = {
+                        "redactions": verdict.redactions,
+                        "injection_risk": verdict.injection.risk,
+                        "injection_findings": verdict.injection.findings,
+                    }
+                except Exception:  # noqa: BLE001 — message objects vary; never fail a run here
+                    pass
+            if settings.guardrails_llm_output == "enforce" and verdict.text != text:
+                try:
+                    response.content = verdict.text
+                except Exception:  # noqa: BLE001
+                    logger.debug("Could not redact LLM output in place; findings recorded only")
+            return response
+        except Exception:  # noqa: BLE001 — a guardrail failure must never kill a run
+            logger.exception("Guardrail output check failed; returning unmodified response")
+            return response
 
     def __getattr__(self, name: str):
         if name.startswith("_"):

@@ -128,6 +128,12 @@ async def start_research(body: StartResearchRequest):
     if not body.query.strip():
         raise HTTPException(status_code=400, detail="Query cannot be empty")
 
+    from guardrails.policy import screen_input
+
+    verdict = screen_input(body.query)
+    if not verdict.allowed:
+        raise HTTPException(status_code=422, detail=verdict.reason)
+
     started = await asyncio.to_thread(
         job_runner.start_research_job,
         body.query,
