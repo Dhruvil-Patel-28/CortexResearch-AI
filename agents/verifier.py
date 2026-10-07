@@ -20,9 +20,11 @@ from pydantic import BaseModel, Field, field_validator
 
 from agents.events import emit_event
 from agents.state import ResearchState
+from utils.config import settings
 from utils.cost import CostMeter
 from utils.llm import get_llm
 from utils.llm_json import JsonCallError, call_json
+from utils.system1 import S1Request, get_router
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +58,8 @@ class ClaimVerdict(BaseModel):
     id: str = ""
     supported: bool = True
     reason: str = ""
+    backend: str | None = None
+    confidence: float | None = None
 
     @field_validator("id", "reason", mode="before")
     @classmethod
@@ -148,7 +152,7 @@ def verifier_node(state: ResearchState) -> dict:
     notes = ""
 
     if pending:
-        verdicts, notes = _judge(pending, meter=meter)
+        verdicts, notes = _judge(pending, meter=meter, state=state)
         for item in pending:
             verdict = verdicts.get(item["id"])
             if verdict is None or verdict.supported:
@@ -184,8 +188,74 @@ def verifier_node(state: ResearchState) -> dict:
     return {"verification": verification, "completed_agents": ["Verifier"], "agent_steps": [step]}
 
 
-def _judge(pending: list[dict], *, meter: CostMeter | None) -> tuple[dict[str, ClaimVerdict], str]:
-    """Ask the fast model to rule on claims that passed the deterministic checks."""
+def _judge(pending: list[dict], *, meter: CostMeter | None, state=None) -> tuple[dict[str, ClaimVerdict], str]:
+    """Route each claim through S1; low-confidence claims are grouped into one
+    fast-tier S2 call. With S1 disabled this is the legacy grouped call."""
+    if not settings.s1_enabled:
+        return _judge_chat(pending, meter=meter)
+
+    router = get_router()
+    verdicts: dict[str, ClaimVerdict] = {}
+    notes = ""
+    low_confidence: list[dict] = []
+
+    for item in pending:
+        context = (
+            f"CLAIM: {item['claim']}\n"
+            f"{('STATED EVIDENCE: ' + item['evidence']) if item.get('evidence') else ''}\n"
+            f"CITED SOURCE CONTENT:\n{item['sources']}"
+        )[:2000]
+        try:
+            decision = router.decide(
+                S1Request(task="claim_support", context=context, options=["supported", "unsupported"])
+            )
+        except Exception as exc:  # noqa: BLE001 — router failure must not kill verification
+            logger.warning("S1 claim decision failed (%s) — escalating", exc)
+            decision = None
+
+        if decision is not None and decision.confidence >= settings.s1_confidence_threshold:
+            supported = decision.label == "supported"
+            verdicts[item["id"]] = ClaimVerdict(
+                id=item["id"],
+                supported=supported,
+                reason=(
+                    "Calibrated S1 check: the cited evidence contains this claim."
+                    if supported
+                    else "Calibrated S1 check: the cited evidence does not contain this claim."
+                ),
+                backend=decision.backend,
+                confidence=round(decision.confidence, 3),
+            )
+            resolved_backend = decision.backend
+            resolved_escalated = False
+            resolved_confidence = round(decision.confidence, 3)
+        else:
+            low_confidence.append(item)
+            resolved_backend = f"s2:{settings.model_fast}"
+            resolved_escalated = decision is not None
+            resolved_confidence = 1.0
+
+        emit_event(
+            state,
+            "route",
+            task="claim_support",
+            backend=resolved_backend,
+            confidence=resolved_confidence,
+            escalated=resolved_escalated,
+            latency_ms=decision.latency_ms if decision is not None else 0,
+        )
+
+    if low_confidence:
+        batch_verdicts, notes = _judge_chat(low_confidence, meter=meter)
+        for cid, verdict in batch_verdicts.items():
+            verdicts[cid] = verdict.model_copy(
+                update={"backend": f"s2:{settings.model_fast}", "confidence": 1.0}
+            )
+    return verdicts, notes
+
+
+def _judge_chat(pending: list[dict], *, meter: CostMeter | None) -> tuple[dict[str, ClaimVerdict], str]:
+    """Legacy grouped fast-tier judgement (also the S2 escalation path)."""
     verdicts: dict[str, ClaimVerdict] = {}
     notes = ""
     llm = get_llm(temperature=0.0, tier="fast")
