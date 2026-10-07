@@ -74,6 +74,13 @@ class Settings(BaseSettings):
     s1_confidence_threshold: float = Field(default=0.75, ge=0.0, le=1.0, description="S1 decisions below this confidence escalate to S2")
     s1_escalation_tier: str = Field(default="fast", description="Chat tier used for S2 escalation")
 
+    # Guardrails (injection scanning, PII scrubbing, LLM I/O policy)
+    guardrails_enabled: bool = Field(default=True, description="Master switch; false bypasses all guardrails")
+    guardrails_pii_enabled: bool = Field(default=True, description="Scrub PII/secrets from scraped and generated text")
+    guardrails_injection_enabled: bool = Field(default=True, description="Scan scraped and generated text for prompt injection")
+    guardrails_llm_output: str = Field(default="monitor", description="LLMClient output check mode: monitor | enforce | off")
+    guardrails_s1_borderline: bool = Field(default=True, description="S1 assist for borderline injection scans (0.3-0.7 risk)")
+
     # Scheduler & digests
     schedule_interval_minutes: int = Field(default=240, description="Minutes between ingest+score cycles")
     digest_hour: int = Field(default=8, description="Hour of day (local time) the daily digest is built")
