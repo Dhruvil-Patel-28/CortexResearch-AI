@@ -16,14 +16,32 @@ from pydantic import BaseModel, Field, field_validator
 
 from agents.events import emit_event
 from agents.state import ResearchState
+from utils.config import settings
 from utils.cost import CostMeter
 from utils.llm import get_llm
 from utils.llm_json import JsonCallError, call_json
+from utils.system1 import S1Request, get_router
 
 logger = logging.getLogger(__name__)
 
 # How many sub-questions each depth targets.
 DEPTH_SUB_QUESTIONS = {"brief": 3, "standard": 5, "deep": 7}
+
+DOMAINS = ["ai", "cloud", "devtools", "security", "hardware", "other"]
+
+
+def classify_query(query: str) -> dict:
+    """S1 classification of the research query. Non-fatal: {} on any failure."""
+    try:
+        router = get_router()
+        domain = router.decide(S1Request(task="query_domain", context=query, options=DOMAINS))
+        kb = router.decide(
+            S1Request(task="kb_relevance", context=query[:500], options=["irrelevant", "relevant"])
+        )
+        return {"domain": domain.label, "kb_relevant": kb.label == "relevant", "backend": domain.backend}
+    except Exception as exc:  # noqa: BLE001 — a hint is optional by design
+        logger.info("Query classification unavailable (%s) — planner proceeds unhinted", exc)
+        return {}
 
 PLANNER_SYSTEM = """You are the Planner of an autonomous research team.
 
@@ -108,11 +126,31 @@ def planner_node(state: ResearchState) -> dict:
     emit_event(state, "stage", stage="planning", label="Planning research", pct=5)
     logger.info("Planner starting | depth=%s | target=%d sub-questions", depth, target)
 
+    classification = classify_query(query) if settings.s1_enabled else {}
+    if classification:
+        emit_event(
+            state,
+            "route",
+            task="query_class",
+            backend=classification.get("backend", "s1"),
+            confidence=1.0,
+            escalated=False,
+            latency_ms=0,
+        )
+
+    hint = ""
+    if classification:
+        hint = (
+            f"classification hint: domain={classification['domain']}, "
+            f"knowledge base {'likely has relevant prior research' if classification['kb_relevant'] else 'is unlikely to have prior research on this'}"
+        )
+
     user_prompt = f"""Research question:
 {query}
 
 Depth: {depth} — produce exactly {target} sub-questions.
 {"Recent conversation context (for continuity): " + context[:800] if context else ""}
+{hint}
 """
     try:
         plan = call_json(
