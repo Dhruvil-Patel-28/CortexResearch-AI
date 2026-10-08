@@ -11,10 +11,11 @@ from __future__ import annotations
 import json
 import sqlite3
 import uuid
+from collections.abc import Iterable
 from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Iterable
+from typing import TYPE_CHECKING, Any
 
 from utils.config import settings
 
@@ -158,7 +159,7 @@ def _decode(r: sqlite3.Row | dict) -> dict[str, Any]:
 # ─── Items ───
 
 
-def upsert_items(items: Iterable["FeedItem"], path: str | None = None) -> tuple[int, int]:
+def upsert_items(items: Iterable[FeedItem], path: str | None = None) -> tuple[int, int]:
     """
     Insert items, ignoring duplicates (same source + external id/url).
 

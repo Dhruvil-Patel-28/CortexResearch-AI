@@ -45,6 +45,7 @@ def _fake_embedder(texts: list[str]) -> np.ndarray:
 
 def _seed_item(item_id: str, *, title: str, body: str, score: float | None = None) -> str:
     from datetime import datetime, timezone
+
     from sources.base import FeedItem
 
     item = FeedItem(

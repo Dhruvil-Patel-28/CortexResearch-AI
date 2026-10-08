@@ -237,8 +237,8 @@ async def bookmark_item(item_id: str, body: BookmarkRequest | None = None):
         from memory.remember import remember_bookmark
 
         remember_bookmark(row, (body.note if body else ""))
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception as exc:  # noqa: BLE001 — memory is best-effort
+        logger.debug("remember_bookmark failed: %s", exc)
     row = await asyncio.to_thread(db.get_item, item_id)
     return _to_item(row)
 
@@ -318,8 +318,8 @@ def _run_refresh(job_id: str, body: RefreshRequest) -> None:
             summary["score"] = score_unscored(limit=settings.prefilter_k, progress=progress)
 
         db.update_job(job_id, status="done", progress={**summary, "stage": "done"})
-    except Exception as e:  # noqa: BLE001
-        logger.error(f"Refresh job {job_id} failed: {e}", exc_info=True)
+    except Exception as e:
+        logger.exception("Refresh job %s failed", job_id)
         db.update_job(job_id, status="failed", progress={"stage": "failed", "error": str(e)})
 
 

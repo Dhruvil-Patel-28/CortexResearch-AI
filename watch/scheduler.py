@@ -47,8 +47,8 @@ def run_cycle(*, include_digest: bool = True, progress=None) -> dict:
         if progress:
             try:
                 progress(stage, detail or {})
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception as exc:  # noqa: BLE001 — progress hooks are best-effort
+                logger.debug("scheduler progress hook failed: %s", exc)
 
     emit("ingest", {})
     result["ingest"] = run_ingest(progress=progress)

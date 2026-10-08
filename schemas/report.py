@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
@@ -136,7 +136,7 @@ class Source(BaseModel):
     title: str = "Untitled source"
     url: str = ""
     kind: SourceKind = "web"
-    published_at: Optional[str] = None
+    published_at: str | None = None
     quote: str = ""
 
     @field_validator("title", "url", "quote", mode="before")
@@ -206,7 +206,7 @@ class KeyDevelopment(BaseModel):
 class TimelineEntry(BaseModel):
     when: str = ""
     what: str = ""
-    source_id: Optional[str] = None
+    source_id: str | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -226,7 +226,7 @@ class TimelineEntry(BaseModel):
 
     @field_validator("source_id", mode="before")
     @classmethod
-    def _single_source(cls, v: Any) -> Optional[str]:
+    def _single_source(cls, v: Any) -> str | None:
         if isinstance(v, list):
             v = v[0] if v else None
         return _as_str(v) or None
@@ -249,7 +249,7 @@ class ComparisonTable(BaseModel):
         out: list[list[str]] = []
         for row in v:
             if isinstance(row, dict):
-                out.append([_as_str(row.get(c, "")) for c in row.keys()])
+                out.append([_as_str(row.get(c, "")) for c in row])
             elif isinstance(row, list):
                 out.append([_as_str(cell) for cell in row])
         return out
@@ -329,7 +329,7 @@ class ResearchReportV2(BaseModel):
     key_developments: list[KeyDevelopment] = Field(default_factory=list)
     technical_explainer: str = ""
     timeline: list[TimelineEntry] = Field(default_factory=list)
-    comparison_table: Optional[ComparisonTable] = None
+    comparison_table: ComparisonTable | None = None
 
     implications: str = Field(default="", description="Why this matters to you specifically")
     risks_and_uncertainty: str = ""

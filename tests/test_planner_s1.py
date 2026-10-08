@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from agents import planner
-from utils.system1 import Decision, DecisionLog, CircuitBreaker, S1Request, S1S2Router
+from utils.system1 import CircuitBreaker, Decision, DecisionLog, S1Request, S1S2Router
 
 
 class SequenceRouter(S1S2Router):

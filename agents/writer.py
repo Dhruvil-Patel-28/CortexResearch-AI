@@ -22,7 +22,12 @@ from pydantic import BaseModel, field_validator
 
 from agents.events import emit_event
 from agents.state import ResearchState
-from schemas.report import ResearchReportV2, Verification, coerce_report, estimate_reading_time
+from schemas.report import (
+    ResearchReportV2,
+    Verification,
+    coerce_report,
+    estimate_reading_time,
+)
 from utils.cost import CostMeter, invoke_llm
 from utils.llm import get_llm
 from utils.llm_json import JsonCallError, call_json, json_object_from

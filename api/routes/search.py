@@ -102,8 +102,8 @@ async def search(
         from memory.remember import remember_search
 
         remember_search(q)
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception as exc:  # noqa: BLE001 — memory is best-effort
+        logger.debug("remember_search failed: %s", exc)
 
     graph = None
     if settings.enable_graph_rag:

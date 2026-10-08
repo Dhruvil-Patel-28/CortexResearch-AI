@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 class NullEmitter:
     """Swallows events (used for CLI runs and tests)."""
 
-    def emit(self, event_type: str, payload: dict[str, Any]) -> None:  # noqa: D102
+    def emit(self, event_type: str, payload: dict[str, Any]) -> None:
         return None
 
 
@@ -30,7 +30,7 @@ def emit_event(state: dict[str, Any], event_type: str, **payload: Any) -> None:
     body = {"type": event_type, "ts": time.time(), **payload}
     try:
         emit(event_type, body)
-    except Exception as exc:  # never let telemetry break a run
+    except Exception as exc:  # noqa: BLE001 — never let telemetry break a run
         logger.debug("event emit failed: %s", exc)
 
     # Mirror scalar event fields into the active Langfuse trace, if any.

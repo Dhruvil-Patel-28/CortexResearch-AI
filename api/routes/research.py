@@ -138,8 +138,8 @@ async def start_research(body: StartResearchRequest):
         from memory.remember import remember_search
 
         remember_search(body.query)
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception as exc:  # noqa: BLE001 — memory is best-effort
+        logger.debug("remember_search failed: %s", exc)
 
     started = await asyncio.to_thread(
         job_runner.start_research_job,
@@ -155,7 +155,7 @@ async def start_research(body: StartResearchRequest):
 @router.post("/items/{item_id}/brief", response_model=RunStarted)
 async def start_item_brief(
     item_id: str,
-    depth: DepthLiteral = Query(default="standard"),
+    depth: DepthLiteral = Query(default="standard"),  # noqa: B008 — FastAPI idiom
 ):
     """Generate a deep brief for one market-pulse item."""
     db.init_db()
@@ -294,7 +294,7 @@ async def export_report(brief_id: str, format: Literal["md", "json"] = "md"):
     report_data = brief.get("report") or {}
     try:
         report = ResearchReportV2.model_validate(report_data)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         raise HTTPException(status_code=409, detail=f"Stored report is not exportable: {e}") from e
 
     filename = render_filename(report)

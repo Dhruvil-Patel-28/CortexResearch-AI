@@ -73,8 +73,8 @@ def store_results(query: str, limit: int = 8) -> list[dict[str, Any]]:
                 [h["ref_id"] for h in hits],
             ).fetchall()
             relevance = {r["item_id"]: r["relevance"] for r in rows}
-    except Exception:  # noqa: BLE001 — scores are optional decoration
-        pass
+    except Exception as exc:  # noqa: BLE001 — scores are optional decoration
+        logger.debug("score decoration lookup failed: %s", exc)
 
     return [
         {

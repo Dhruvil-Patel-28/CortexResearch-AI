@@ -165,7 +165,7 @@ def test_delta_query_anchors_on_last_digest(store_db):
 
 def test_scheduler_cycle_runs_ingest_score_digest(store_db, monkeypatch):
     """The full scheduled cycle, with ingest stubbed to seeded rows."""
-    import watch.scheduler as scheduler
+    from watch import scheduler
 
     def fake_ingest(*, keywords=None, sources=None, progress=None):
         _seed_item("s1", title="Cycle story", source="hackernews", score=None)

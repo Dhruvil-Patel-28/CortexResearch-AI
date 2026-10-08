@@ -22,7 +22,7 @@ from utils.config import settings
 
 logger = logging.getLogger(__name__)
 
-_current: contextvars.ContextVar["RunTrace | None"] = contextvars.ContextVar(
+_current: contextvars.ContextVar[RunTrace | None] = contextvars.ContextVar(
     "run_trace", default=None
 )
 
@@ -74,7 +74,7 @@ class RunTrace:
         self._span = span
 
     @classmethod
-    def start(cls, query: str, depth: str, job_id: str = "") -> "RunTrace":
+    def start(cls, query: str, depth: str, job_id: str = "") -> RunTrace:
         """Open a trace; degrades to a disabled no-op on any failure."""
         try:
             client = _get_client()
@@ -146,7 +146,7 @@ def active_trace(query: str = "", depth: str = "", job_id: str = ""):
         _current.reset(token)
 
 
-def current_trace() -> "RunTrace | None":
+def current_trace() -> RunTrace | None:
     """The trace active in this context, or None."""
     return _current.get()
 

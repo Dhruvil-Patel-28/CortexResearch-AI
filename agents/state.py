@@ -6,8 +6,9 @@ Flow (v2):
     Planner → Researcher → Writer → Verifier → Reviser → FINISH
 """
 
-from typing import Annotated, Any, Callable, TypedDict
 import operator
+from collections.abc import Callable
+from typing import Annotated, Any, TypedDict
 
 from langchain_core.messages import BaseMessage
 

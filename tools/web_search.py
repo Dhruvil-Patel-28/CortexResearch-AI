@@ -70,7 +70,7 @@ def _domain(url: str) -> str:
     if not url:
         return ""
     host = url.split("://", 1)[-1].split("/", 1)[0]
-    return host[4:] if host.startswith("www.") else host
+    return host.removeprefix("www.")
 
 
 def web_search(query: str) -> str:

@@ -143,9 +143,10 @@ def test_active_trace_context_for_llm_client(monkeypatch):
 
 
 def test_llm_client_records_generation(monkeypatch):
-    from utils import tracing
-    import utils.llm as llm_mod
     from langchain_core.messages import AIMessage
+
+    import utils.llm as llm_mod
+    from utils import tracing
 
     _enable(monkeypatch)
     fake = FakeLangfuse()

@@ -6,7 +6,7 @@ import pytest
 
 from sources.base import FeedItem
 from store import db
-from utils.system1 import Decision, DecisionLog, CircuitBreaker, S1Request, S1S2Router
+from utils.system1 import CircuitBreaker, Decision, DecisionLog, S1Request, S1S2Router
 from watch import ranker
 
 
@@ -63,7 +63,7 @@ def test_s1_scores_map_to_ten_point_scale(seeded_db, monkeypatch):
     assert stub.calls == 1
     db.save_scores(rows)
     cached = db.list_items(limit=1, order="newest")[0]
-    assert "relevance" in cached or True  # row round-trips through the store
+    assert cached.get("relevance") is not None, "score row must round-trip through the store"
 
 
 def test_below_threshold_items_skip_rationale(seeded_db, monkeypatch):

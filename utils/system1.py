@@ -89,7 +89,7 @@ class JevBackend:
             response = self._client.post("/decisions", json=payload)
             response.raise_for_status()
             body = response.json()
-        except Exception as exc:  # noqa: BLE001 — any transport/HTTP failure is a JevError
+        except Exception as exc:
             raise JevError(f"Jev request failed: {exc}") from exc
         latency_ms = int((time.monotonic() - started) * 1000)
 
@@ -186,10 +186,10 @@ class LocalCalibratedBackend:
 
 # ── Router / breaker / decision log ────────────────────────────────────
 
-from collections import deque  # noqa: E402
-from collections.abc import Callable  # noqa: E402
+from collections import deque
+from collections.abc import Callable
 
-from pydantic import ValidationError  # noqa: E402
+from pydantic import ValidationError
 
 
 class DecisionLog:

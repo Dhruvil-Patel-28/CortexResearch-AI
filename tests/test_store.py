@@ -16,7 +16,7 @@ def db_path(tmp_path):
 
 
 def make_item(**kw) -> FeedItem:
-    base = dict(source="hn", title="An item", url="https://example.com/a", external_id="1")
+    base = {"source": "hn", "title": "An item", "url": "https://example.com/a", "external_id": "1"}
     base.update(kw)
     return FeedItem(**base)
 

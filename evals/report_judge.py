@@ -19,13 +19,12 @@ import logging
 
 from pydantic import BaseModel, Field
 
+from evals.results import JudgeDimension, JudgeResult
 from schemas.report import ResearchReportV2, coerce_report
 from utils.config import settings
 from utils.cost import CostMeter
 from utils.llm import LLMClient
 from utils.llm_json import call_json
-
-from evals.results import JudgeResult, JudgeDimension
 
 logger = logging.getLogger(__name__)
 

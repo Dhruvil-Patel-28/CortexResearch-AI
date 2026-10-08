@@ -13,8 +13,8 @@ creates a cluster becomes its representative.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from hashlib import sha1
-from typing import Iterable
 
 STOPWORDS = {
     "the", "a", "an", "and", "or", "for", "with", "from", "into", "onto", "over", "under",

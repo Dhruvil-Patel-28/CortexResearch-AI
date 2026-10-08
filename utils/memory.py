@@ -9,7 +9,8 @@ For production, swap the dict with Redis or a database backend.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
+
 from utils.config import settings
 
 logger = logging.getLogger(__name__)
@@ -47,7 +48,7 @@ class SessionManager:
         self._sessions[session_id].append({
             "query": query,
             "response": response,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         })
 
         # Trim old turns if over the limit

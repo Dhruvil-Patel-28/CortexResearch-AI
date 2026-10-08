@@ -41,7 +41,7 @@ def canonical_url(url: str) -> str:
     except ValueError:
         return url.lower()
     host = (parsed.netloc or "").lower()
-    host = host[4:] if host.startswith("www.") else host
+    host = host.removeprefix("www.")
     path = (parsed.path or "").rstrip("/")
     return f"{host}{path}".lower()
 

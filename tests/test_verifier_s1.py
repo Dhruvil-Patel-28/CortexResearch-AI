@@ -6,7 +6,7 @@ import pytest
 
 from agents import verifier
 from agents.verifier import ClaimVerdict, VerifierOutput
-from utils.system1 import Decision, DecisionLog, CircuitBreaker, S1Request, S1S2Router
+from utils.system1 import CircuitBreaker, Decision, DecisionLog, S1Request, S1S2Router
 
 
 class StubRouter(S1S2Router):

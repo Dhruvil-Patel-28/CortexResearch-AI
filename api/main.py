@@ -5,26 +5,26 @@ Provides endpoints for research queries, health checks, and session management.
 
 import asyncio
 import logging
-from datetime import datetime
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+from agents.research_agent import run_research
 from api.models import (
+    AgentStep,
+    Citation,
+    HealthResponse,
+    ResearchReport,
     ResearchRequest,
     ResearchResponse,
-    ResearchReport,
-    Citation,
-    AgentStep,
-    HealthResponse,
     SessionHistoryResponse,
 )
 from api.routes import digests as digests_routes
 from api.routes import research as research_routes
 from api.routes import search as search_routes
 from api.routes import watch as watch_routes
-from agents.research_agent import run_research
 from reports.markdown import render_markdown
 from schemas.report import ResearchReportV2
 from utils.config import settings
@@ -51,8 +51,8 @@ async def lifespan(app: FastAPI):
         logger.info("Warming up: loading embedding model + FAISS index...")
         await asyncio.to_thread(_warmup_resources)
         logger.info("Warmup complete — ready to serve requests")
-    except Exception as e:
-        logger.warning(f"Warmup failed (will load on first request): {e}")
+    except Exception as e:  # noqa: BLE001 — warmup is best-effort
+        logger.warning("Warmup failed (will load on first request): %s", e)
 
     yield
     logger.info("API shutting down")
@@ -174,7 +174,7 @@ async def research(request: ResearchRequest):
                 )
                 for s in result.get("agent_steps", [])
             ],
-            timestamp=datetime.now(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         logger.info(
@@ -184,10 +184,10 @@ async def research(request: ResearchRequest):
         return response
 
     except Exception as e:
-        logger.error(f"Research request failed: {e}", exc_info=True)
+        logger.exception("Research request failed")
         raise HTTPException(
             status_code=500,
-            detail=f"Research pipeline failed: {str(e)}",
+            detail=f"Research pipeline failed: {e!s}",
         )
 
 

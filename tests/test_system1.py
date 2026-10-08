@@ -80,7 +80,7 @@ def test_jev_timeout_raises() -> None:
 
 # ── LocalCalibratedBackend ────────────────────────────────────────────
 
-from utils.system1 import LocalCalibratedBackend  # noqa: E402
+from utils.system1 import LocalCalibratedBackend
 
 TECH = ["kubernetes cluster autoscaling devops pipeline", "devops observability kubernetes rollout",
         "kubernetes operator devops incident", "terraform kubernetes devops deploy"]
@@ -130,7 +130,12 @@ def test_local_backend_undertrained_stays_neutral() -> None:
 
 # ── Router / breaker / log ────────────────────────────────────────────
 
-from utils.system1 import CircuitBreaker, Decision, DecisionLog, S1S2Router  # noqa: E402
+from utils.system1 import (
+    CircuitBreaker,
+    Decision,
+    DecisionLog,
+    S1S2Router,
+)
 
 
 def _stub_backend(label: str = "high", confidence: float = 0.9) -> LocalCalibratedBackend:

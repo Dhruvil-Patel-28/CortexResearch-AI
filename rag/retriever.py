@@ -28,10 +28,11 @@ import hashlib
 import json
 import logging
 import math
-from dataclasses import dataclass
+from collections.abc import Callable
 from contextlib import closing
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from store import db
 from tools.store_search import tokens

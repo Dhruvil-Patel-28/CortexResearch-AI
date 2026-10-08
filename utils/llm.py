@@ -24,7 +24,7 @@ from utils.config import settings
 
 logger = logging.getLogger(__name__)
 
-_llm_cache: dict[tuple[str, float | None], "LLMClient"] = {}
+_llm_cache: dict[tuple[str, float | None], LLMClient] = {}
 _NO_TEMPERATURE: set[str] = set()
 
 
@@ -49,7 +49,7 @@ class LLMClient:
             return self._record_generation(
                 self._check_output(self._llm.invoke(messages, **kwargs)), started
             )
-        except Exception as exc:  # noqa: BLE001 — re-raised unless it is the temperature case
+        except Exception as exc:
             if self.temperature is not None and _is_temperature_error(exc):
                 logger.warning("Model %s rejects `temperature` — retrying without it", self.model)
                 _NO_TEMPERATURE.add(self.model)
@@ -76,8 +76,8 @@ class LLMClient:
                     output_tokens=output_tokens,
                     latency_ms=(time.perf_counter() - started) * 1000,
                 )
-        except Exception:  # noqa: BLE001 — tracing must never fail a call
-            pass
+        except Exception as exc:  # noqa: BLE001 — tracing must never fail a call
+            logger.debug("LLM trace generation failed: %s", exc)
         return response
 
     def _check_output(self, response):
@@ -109,23 +109,23 @@ class LLMClient:
                     from guardrails import trace
 
                     trace.record_output(verdict.redactions, verdict.injection.risk)
-                except Exception:  # noqa: BLE001
-                    pass
+                except Exception as exc:  # noqa: BLE001
+                    logger.debug("guardrail output trace failed: %s", exc)
                 try:
                     response.guardrails = {
                         "redactions": verdict.redactions,
                         "injection_risk": verdict.injection.risk,
                         "injection_findings": verdict.injection.findings,
                     }
-                except Exception:  # noqa: BLE001 — message objects vary; never fail a run here
-                    pass
+                except Exception as exc:  # noqa: BLE001 — message objects vary; never fail a run here
+                    logger.debug("attaching guardrail findings failed: %s", exc)
             if settings.guardrails_llm_output == "enforce" and verdict.text != text:
                 try:
                     response.content = verdict.text
                 except Exception:  # noqa: BLE001
                     logger.debug("Could not redact LLM output in place; findings recorded only")
             return response
-        except Exception:  # noqa: BLE001 — a guardrail failure must never kill a run
+        except Exception:
             logger.exception("Guardrail output check failed; returning unmodified response")
             return response
 

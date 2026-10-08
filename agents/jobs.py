@@ -172,8 +172,8 @@ def start_research_job(
                 from memory.remember import remember_report
 
                 remember_report({**(result.get("report") or {}), "id": brief_id or ""})
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception as exc:  # noqa: BLE001 — memory is best-effort
+                logger.debug("remember_report failed: %s", exc)
             run.emit(
                 "done",
                 {
@@ -188,8 +188,8 @@ def start_research_job(
             )
             run.close("done")
             logger.info("Research job %s finished (brief=%s)", job_id, brief_id)
-        except Exception as exc:  # noqa: BLE001 — the worker must never die silently
-            logger.error("Research job %s failed: %s", job_id, exc, exc_info=True)
+        except Exception as exc:
+            logger.exception("Research job %s failed", job_id)
             if brief_id:
                 store.finish_brief(
                     brief_id,

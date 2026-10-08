@@ -185,8 +185,8 @@ def score_unscored(limit: int | None = None, progress=None) -> dict:
         if progress:
             try:
                 progress(stage, detail or {})
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception as exc:  # noqa: BLE001 — progress hooks are best-effort
+                logger.debug("ranker progress hook failed: %s", exc)
 
     candidates = db.list_items(limit=settings.prefilter_k, order="newest")
     already = db.scored_item_ids(profile.version)

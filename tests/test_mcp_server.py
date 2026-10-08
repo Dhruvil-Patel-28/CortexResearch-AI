@@ -7,7 +7,6 @@ import types
 
 import pytest
 
-
 # Shared registry: the fake FastMCP class is bound into `mcp_server.server`
 # once, so its decorator closure must point at a module-level dict that each
 # test clears, rather than a per-fixture local.

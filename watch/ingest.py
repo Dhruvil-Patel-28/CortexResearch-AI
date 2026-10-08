@@ -77,8 +77,8 @@ def run_ingest(
         if progress:
             try:
                 progress(stage, detail or {})
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception as exc:  # noqa: BLE001 — progress hooks are best-effort
+                logger.debug("ingest progress hook failed: %s", exc)
 
     _emit("ingest_started", {"sources": [a.name for a in adapters]})
 
@@ -91,8 +91,8 @@ def run_ingest(
                 stats[name] = {"fetched": len(items)}
                 all_items.extend(items)
                 _emit("source_done", {"source": name, "fetched": len(items)})
-            except Exception as e:  # noqa: BLE001
-                logger.warning(f"Adapter {name} failed: {e}")
+            except Exception as e:  # noqa: BLE001 — adapter failures are isolated
+                logger.warning("Adapter %s failed: %s", name, e)
                 stats[name] = {"fetched": 0, "error": str(e)}
                 _emit("source_failed", {"source": name, "error": str(e)})
 
@@ -124,7 +124,7 @@ def run_ingest(
         "new": new_count,
         "duplicates": dup_count,
         "total_fetched": len(all_items),
-        "clusters": len(set(getattr(i, "cluster_key", "") for i in all_items if getattr(i, "cluster_key", ""))),
+        "clusters": len({getattr(i, "cluster_key", "") for i in all_items if getattr(i, "cluster_key", "")}),
         "sources": stats,
         "duration_s": round(duration, 2),
     }

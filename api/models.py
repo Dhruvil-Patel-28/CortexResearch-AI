@@ -3,23 +3,23 @@ Pydantic models for API request/response contracts.
 Provides typed, validated data structures for the research pipeline.
 """
 
-from pydantic import BaseModel, Field
-from typing import Optional
 from datetime import datetime
+
+from pydantic import BaseModel, Field
 
 
 class ResearchRequest(BaseModel):
     """Incoming research query from the user."""
     query: str = Field(..., min_length=1, max_length=2000, description="The research question or topic")
-    session_id: Optional[str] = Field(default=None, description="Session ID for conversation continuity")
+    session_id: str | None = Field(default=None, description="Session ID for conversation continuity")
 
 
 class Citation(BaseModel):
     """A single source citation from RAG or web search."""
     source_name: str = Field(..., description="Name of the source document or URL")
-    page_number: Optional[int] = Field(default=None, description="Page number within the source document")
+    page_number: int | None = Field(default=None, description="Page number within the source document")
     content_snippet: str = Field(..., description="Relevant excerpt from the source")
-    relevance_score: Optional[float] = Field(default=None, description="Similarity/relevance score")
+    relevance_score: float | None = Field(default=None, description="Similarity/relevance score")
 
 
 class ResearchReport(BaseModel):

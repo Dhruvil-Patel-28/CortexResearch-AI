@@ -9,7 +9,10 @@ delta between snapshots taken at run start and finalisation.
 
 from __future__ import annotations
 
+import logging
 import threading
+
+logger = logging.getLogger(__name__)
 
 _lock = threading.Lock()
 _totals: dict[str, float] = {
@@ -31,8 +34,8 @@ def record_content(summary: dict) -> None:
             _totals["pii_redacted"] += len(summary.get("pii_kinds") or [])
             if summary.get("injection_action") == "strip":
                 _totals["injections_stripped"] += summary.get("injection_count") or 0
-    except Exception:  # noqa: BLE001 — tracing must never break sanitization
-        pass
+    except Exception as exc:  # noqa: BLE001 — tracing must never break sanitization
+        logger.debug("guardrail trace record_content failed: %s", exc)
 
 
 def record_output(redactions: list[dict], injection_risk: float) -> None:
@@ -41,8 +44,8 @@ def record_output(redactions: list[dict], injection_risk: float) -> None:
         with _lock:
             _totals["output_redactions"] += sum(r.get("count", 0) for r in redactions or [])
             _totals["output_injection_risk"] = max(_totals["output_injection_risk"], injection_risk or 0.0)
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception as exc:  # noqa: BLE001 — tracing must never break a run
+        logger.debug("guardrail trace record_output failed: %s", exc)
 
 
 def snapshot() -> dict:

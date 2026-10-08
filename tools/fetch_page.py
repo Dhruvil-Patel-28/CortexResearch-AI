@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Optional
 
 import httpx
 from lxml import html as lxml_html
@@ -117,7 +116,7 @@ def fetch_many(urls: list[str], *, timeout: float = 10.0, max_chars: int = 7000)
     return out
 
 
-def summarise_source_quality(text: Optional[str]) -> str:
+def summarise_source_quality(text: str | None) -> str:
     """Rough quality label used in logs/trace."""
     if not text:
         return "none"

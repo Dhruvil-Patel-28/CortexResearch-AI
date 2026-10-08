@@ -11,13 +11,14 @@ Eval runner CLI — `python -m evals.runner --suite guardrails|judge|all`.
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 
-from evals import results
-from evals import guardrails_eval
-from evals import report_judge
+from evals import guardrails_eval, report_judge, results
 from evals.guardrails_eval import format_report
 from utils.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 def _load_report(report_id: str | None) -> dict:
@@ -54,8 +55,8 @@ def _export_to_langfuse(suite: str, result) -> None:
                 trace.score(f"judge_{dim.name}", dim.score, dim.rationale)
             trace.score("judge_weighted", result.weighted_score)
         trace.finish("ok")
-    except Exception:  # noqa: BLE001 — export must never fail the runner
-        pass
+    except Exception as exc:  # noqa: BLE001 — export must never fail the runner
+        logger.debug("Langfuse eval export failed: %s", exc)
 
 
 def main(argv: list[str] | None = None) -> int:

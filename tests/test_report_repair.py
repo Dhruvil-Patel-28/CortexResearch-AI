@@ -87,7 +87,7 @@ def _draft_state(**overrides):
 
 def test_patch_draft_applies_rewrite_and_remove(monkeypatch):
     from agents import writer as writer_mod
-    from agents.writer import _patch_draft, PatchList, ClaimPatch
+    from agents.writer import ClaimPatch, PatchList, _patch_draft
 
     def fake_call_json(llm, **kwargs):
         return PatchList(revisions=[

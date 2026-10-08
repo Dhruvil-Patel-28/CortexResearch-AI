@@ -36,7 +36,7 @@ class FakeLLM:
         self._responder = responder
         self.calls: list[list] = []
 
-    def invoke(self, messages, **kwargs):  # noqa: ARG002 — LangChain-compatible surface
+    def invoke(self, messages, **kwargs):
         self.calls.append(messages)
         return AIMessage(
             content=self._responder(messages),
@@ -202,7 +202,7 @@ def test_extract_main_text_prefers_article_body():
 
 
 def test_pipeline_produces_a_schema_valid_report_with_verified_citations(monkeypatch):
-    fake, writer_outputs = _install_fakes(
+    _, writer_outputs = _install_fakes(
         monkeypatch,
         developments=[DEVELOPMENT_OK, DEVELOPMENT_OK2, DEVELOPMENT_BAD],
     )

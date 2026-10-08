@@ -15,7 +15,8 @@ from __future__ import annotations
 import logging
 import time
 import uuid
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from langgraph.graph import END, StateGraph
 
@@ -25,13 +26,12 @@ from agents.researcher import researcher_node
 from agents.state import ResearchState
 from agents.verifier import verifier_node
 from agents.writer import reviser_node, writer_node
+from guardrails import trace as guardrail_trace
 from schemas.report import ResearchReportV2, coerce_report
+from utils import tracing
 from utils.cost import CostMeter
 from utils.memory import session_manager
 from utils.system1 import DecisionLog, get_router
-
-from guardrails import trace as guardrail_trace
-from utils import tracing
 
 logger = logging.getLogger(__name__)
 
@@ -151,8 +151,8 @@ def _run_pipeline(*, query, depth, session_id, item_id, emit, run_trace, meter, 
 
     try:
         final_state = research_graph.invoke(initial_state)
-    except Exception as exc:  # noqa: BLE001 — always return a schema-valid report
-        logger.error("Deep-research pipeline failed: %s", exc, exc_info=True)
+    except Exception as exc:
+        logger.exception("Deep-research pipeline failed")
         emit_event(initial_state, "error", message=str(exc), label="Research pipeline failed")
         report = coerce_report({}, query=query, depth=depth)
         report.title = f"Research failed: {query[:80]}"

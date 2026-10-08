@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import sys
 import types
+from typing import ClassVar
 
 import pytest
 
@@ -12,8 +13,8 @@ import pytest
 class FakeLightRAG:
     """Records construction + inserts; canned query answer."""
 
-    instances: list["FakeLightRAG"] = []
-    query_answer = "graph says: connected"
+    instances: ClassVar[list[FakeLightRAG]] = []
+    query_answer: ClassVar[str] = "graph says: connected"
 
     def __init__(self, working_dir="", llm_model_func=None, llm_model_name=None, embedding_func=None):
         self.working_dir = working_dir
@@ -97,6 +98,7 @@ def test_llm_model_func_returns_text(fake_lightrag, graph_enabled, monkeypatch):
     rag = FakeLightRAG.instances[-1]
 
     from langchain_core.messages import AIMessage
+
     import utils.llm as llm_mod
 
     class FakeLLM:

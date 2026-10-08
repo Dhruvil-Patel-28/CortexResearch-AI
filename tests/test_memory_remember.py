@@ -21,7 +21,7 @@ class FakeMemory:
 
 @pytest.fixture()
 def fake(monkeypatch):
-    import memory.remember as remember
+    from memory import remember
 
     fake = FakeMemory()
     monkeypatch.setattr(remember, "get_memory", lambda: fake)
@@ -41,7 +41,7 @@ def test_remember_report_payload(fake):
 
 
 def test_remember_report_noop_without_memory(monkeypatch):
-    import memory.remember as remember
+    from memory import remember
 
     monkeypatch.setattr(remember, "get_memory", lambda: None)
     assert remember.remember_report({"title": "x"}) is False
@@ -77,7 +77,7 @@ def test_remember_digest_payload(fake):
 
 
 def test_remember_failure_is_swallowed(monkeypatch):
-    import memory.remember as remember
+    from memory import remember
 
     class Broken:
         def remember(self, text, metadata=None):
@@ -96,7 +96,7 @@ def test_recall_formats_results(fake):
 
 
 def test_recall_empty_without_memory(monkeypatch):
-    import memory.remember as remember
+    from memory import remember
 
     monkeypatch.setattr(remember, "get_memory", lambda: None)
     assert remember.recall("anything") == ""
