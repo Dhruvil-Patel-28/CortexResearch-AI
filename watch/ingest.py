@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sources.base import FeedItem, SourceAdapter
 from store import db
@@ -57,7 +57,7 @@ def run_ingest(
     from watch.dedupe import assign_clusters
 
     db.init_db()
-    started = datetime.now(timezone.utc)
+    started = datetime.now(UTC)
 
     names = sources or [s.strip().lower() for s in settings.watch_sources.split(",") if s.strip()]
     adapters = _get_adapters(names)
@@ -117,20 +117,25 @@ def run_ingest(
         item.cluster_key = cluster_map.get(item.id, "")
 
     new_count, dup_count = db.upsert_items(all_items)
-    db.set_meta("last_ingest_at", datetime.now(timezone.utc).isoformat())
+    db.set_meta("last_ingest_at", datetime.now(UTC).isoformat())
 
-    duration = (datetime.now(timezone.utc) - started).total_seconds()
+    duration = (datetime.now(UTC) - started).total_seconds()
     result = {
         "new": new_count,
         "duplicates": dup_count,
         "total_fetched": len(all_items),
-        "clusters": len({getattr(i, "cluster_key", "") for i in all_items if getattr(i, "cluster_key", "")}),
+        "clusters": len(
+            {getattr(i, "cluster_key", "") for i in all_items if getattr(i, "cluster_key", "")}
+        ),
         "sources": stats,
         "duration_s": round(duration, 2),
     }
     logger.info(
-        f"Ingest done in {duration:.1f}s: {new_count} new, {dup_count} duplicates "
-        f"from {len(adapters)} sources"
+        "Ingest done in %.1fs: %s new, %s duplicates from %s sources",
+        duration,
+        new_count,
+        dup_count,
+        len(adapters),
     )
     _emit("ingest_done", result)
     return result

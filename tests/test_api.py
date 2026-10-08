@@ -131,7 +131,9 @@ def test_bookmark_roundtrip(client):
     items = db.list_items(collapse=False, order="newest")
     subject = items[0]["id"]
 
-    assert client.post(f"/watch/items/{subject}/bookmark", json={"note": "read"}).json()["bookmarked"]
+    assert client.post(f"/watch/items/{subject}/bookmark", json={"note": "read"}).json()[
+        "bookmarked"
+    ]
     assert client.get("/watch/feed?bookmarked=true").json()["count"] == 1
 
     assert not client.delete(f"/watch/items/{subject}/bookmark").json()["bookmarked"]

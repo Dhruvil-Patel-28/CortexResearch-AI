@@ -65,7 +65,11 @@ def test_get_report_roundtrip(seeded_db):
     brief_id = seeded_db.create_brief(query="What is new?", item_id=None, topic_id=None)
     seeded_db.finish_brief(
         brief_id,
-        report={"title": "Report T", "tldr": ["x"], "sources": [{"id": "s1", "title": "S", "url": "https://e"}]},
+        report={
+            "title": "Report T",
+            "tldr": ["x"],
+            "sources": [{"id": "s1", "title": "S", "url": "https://e"}],
+        },
         citations=[],
         cost_usd=0.01,
     )
@@ -82,7 +86,14 @@ def test_search_library_uses_retriever(seeded_db, monkeypatch):
     class FakeRetriever:
         def search(self, query, k=8, kinds=("item", "brief")):
             return [
-                {"ref_id": "item:m1", "kind": "item", "title": "Agent memory systems", "text": "A story about agent memory.", "score": 0.9, "url": "https://e.com/m1"},
+                {
+                    "ref_id": "item:m1",
+                    "kind": "item",
+                    "title": "Agent memory systems",
+                    "text": "A story about agent memory.",
+                    "score": 0.9,
+                    "url": "https://e.com/m1",
+                },
             ]
 
     import rag.retriever as retriever_mod

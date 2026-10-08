@@ -93,7 +93,11 @@ def graph_results(query: str, k: int = 5) -> dict[str, Any]:
     never raises.
     """
     if not settings.enable_graph_rag:
-        return {"available": False, "answer": "", "reason": "GraphRAG is disabled (ENABLE_GRAPH_RAG)"}
+        return {
+            "available": False,
+            "answer": "",
+            "reason": "GraphRAG is disabled (ENABLE_GRAPH_RAG)",
+        }
     rag = _get_lightrag()
     if rag is None:
         return {"available": False, "answer": "", "reason": _unavailable_reason}
@@ -137,9 +141,7 @@ def _get_lightrag() -> Any | None:
     try:
         from lightrag import EmbeddingFunc, LightRAG
     except ImportError:
-        _unavailable_reason = (
-            "lightrag-hku is not installed — pip install lightrag-hku to enable"
-        )
+        _unavailable_reason = "lightrag-hku is not installed — pip install lightrag-hku to enable"
         return None
     try:
         _lightrag_instance = LightRAG(

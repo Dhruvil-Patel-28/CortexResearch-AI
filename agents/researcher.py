@@ -125,7 +125,13 @@ def researcher_node(state: ResearchState) -> dict:
 
     meter: CostMeter | None = state.get("meter")
     logger.info("Researcher starting | %d sub-questions | depth=%s", len(sub_questions), depth)
-    emit_event(state, "stage", stage="gathering", label=f"Searching {len(sub_questions)} sub-questions", pct=15)
+    emit_event(
+        state,
+        "stage",
+        stage="gathering",
+        label=f"Searching {len(sub_questions)} sub-questions",
+        pct=15,
+    )
 
     # ── Build the task list: store + knowledge base + web per sub-question ──
     tasks: list[tuple[int, str, str]] = []
@@ -142,7 +148,7 @@ def researcher_node(state: ResearchState) -> dict:
     tasks_per_sq: dict[int, int] = {}
     for idx, _, _ in tasks:
         tasks_per_sq[idx] = tasks_per_sq.get(idx, 0) + 1
-    done_per_sq: dict[int, int] = {idx: 0 for idx in tasks_per_sq}
+    done_per_sq: dict[int, int] = dict.fromkeys(tasks_per_sq, 0)
     n_sq = len(sub_questions)
 
     # Seed one lane per sub-question so the live view shows the parallel
@@ -222,7 +228,13 @@ def researcher_node(state: ResearchState) -> dict:
     to_fetch = web_urls[:fetch_budget]
     fetched = fetch_many(to_fetch) if to_fetch else {}
     enriched = sum(1 for text in fetched.values() if len(text) > 600)
-    emit_event(state, "stage", stage="reading", label=f"Read {enriched}/{len(to_fetch)} pages in full", pct=42)
+    emit_event(
+        state,
+        "stage",
+        stage="reading",
+        label=f"Read {enriched}/{len(to_fetch)} pages in full",
+        pct=42,
+    )
 
     # ── Register every source, grouped by sub-question, ids in reading order ──
     registry = SourceRegistry(limit=REGISTRY_LIMIT)
@@ -239,7 +251,11 @@ def researcher_node(state: ResearchState) -> dict:
                 snippet = hit.get("snippet", "")
 
             source_id = registry.add(
-                kind=("knowledge_base" if kind == "rag" else ("web" if kind == "web" else hit.get("source", "web"))),
+                kind=(
+                    "knowledge_base"
+                    if kind == "rag"
+                    else ("web" if kind == "web" else hit.get("source", "web"))
+                ),
                 title=hit.get("title", ""),
                 url=hit.get("url", ""),
                 snippet=snippet,
@@ -273,7 +289,13 @@ def researcher_node(state: ResearchState) -> dict:
                         "source_ids": extra,
                     }
                 )
-                emit_event(state, "stage", stage="gap_fill", label=f"Filled a coverage gap with {len(extra)} sources", pct=48)
+                emit_event(
+                    state,
+                    "stage",
+                    stage="gap_fill",
+                    label=f"Filled a coverage gap with {len(extra)} sources",
+                    pct=48,
+                )
 
     research_data = _render_evidence(sub_findings, registry)
     emit_event(
@@ -298,7 +320,9 @@ def researcher_node(state: ResearchState) -> dict:
         pct=52,
         **gr,
     )
-    logger.info("Researcher gathered %d sources across %d sub-questions", len(registry), len(sub_findings))
+    logger.info(
+        "Researcher gathered %d sources across %d sub-questions", len(registry), len(sub_findings)
+    )
 
     step = {
         "agent_name": "Researcher",
@@ -317,7 +341,9 @@ def researcher_node(state: ResearchState) -> dict:
     }
 
 
-def _candidates(results: dict, fetched: dict[str, str], idx: int, *, cap: int) -> list[tuple[str, dict]]:
+def _candidates(
+    results: dict, fetched: dict[str, str], idx: int, *, cap: int
+) -> list[tuple[str, dict]]:
     """
     Choose the best sources for one sub-question, in citation order:
 
@@ -365,11 +391,11 @@ def _candidates(results: dict, fetched: dict[str, str], idx: int, *, cap: int) -
     return picked
 
 
-def _gap_check(query: str, sub_findings: list[dict], registry: SourceRegistry, *, meter: CostMeter | None) -> GapCheck:
+def _gap_check(
+    query: str, sub_findings: list[dict], registry: SourceRegistry, *, meter: CostMeter | None
+) -> GapCheck:
     """Ask the fast model whether the evidence set can answer the question."""
-    covered = "\n".join(
-        f"- {f['question']} → {len(f['source_ids'])} sources" for f in sub_findings
-    )
+    covered = "\n".join(f"- {f['question']} → {len(f['source_ids'])} sources" for f in sub_findings)
     titles = "\n".join(f"[{s['id']}] {s['title']}" for s in registry.as_list()[:30])
     prompt = f"""Main question: {query}
 
@@ -398,7 +424,9 @@ Otherwise set sufficient=true and leave extra_queries empty."""
         return GapCheck(sufficient=True)
 
 
-def _run_extra_round(queries: list[str], fetched: dict[str, str], registry: SourceRegistry) -> list[str]:
+def _run_extra_round(
+    queries: list[str], fetched: dict[str, str], registry: SourceRegistry
+) -> list[str]:
     """Run gap-filling web searches and register the best new sources."""
     new_ids: list[str] = []
     with ThreadPoolExecutor(max_workers=len(queries) or 1) as executor:
@@ -421,7 +449,9 @@ def _run_extra_round(queries: list[str], fetched: dict[str, str], registry: Sour
     return new_ids
 
 
-def _render_evidence(sub_findings: list[dict], registry: SourceRegistry, *, per_source: int = 700) -> str:
+def _render_evidence(
+    sub_findings: list[dict], registry: SourceRegistry, *, per_source: int = 700
+) -> str:
     """Group registered evidence under the sub-question it answers.
 
     Every source body is wrapped in <untrusted> delimiters — data from the web,

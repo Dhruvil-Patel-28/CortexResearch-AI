@@ -15,9 +15,11 @@ jobs:
           python-version: "3.12"
           cache: pip
       - name: Install dependencies
-        run: pip install -r requirements.txt ruff
+        run: pip install -r requirements.txt
       - name: Lint
         run: ruff check .
+      - name: Format check
+        run: ruff format --check .
       - name: Tests (offline, fixture-based)
         run: pytest -q
         env:
@@ -38,9 +40,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Typecheck
-        run: npx tsc --noEmit
+        run: npm run typecheck
       - name: Lint
-        run: npx eslint src
+        run: npm run lint
       - name: Build
         run: npm run build
         env:

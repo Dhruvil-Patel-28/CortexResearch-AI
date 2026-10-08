@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.14, Pydantic, httpx, numpy, sentence-transformers (existing dep), pytest.
 
-**Spec:** `docs/superpowers/specs/2026-10-07-system1-routing-design.md`
+**Spec:** `docs/specs/2026-10-07-system1-routing-design.md`
 
 ## Global Constraints
 

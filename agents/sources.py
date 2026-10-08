@@ -17,7 +17,16 @@ from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
-_TRACKING_PARAMS = {"utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "ref", "fbclid", "gclid"}
+_TRACKING_PARAMS = {
+    "utm_source",
+    "utm_medium",
+    "utm_campaign",
+    "utm_term",
+    "utm_content",
+    "ref",
+    "fbclid",
+    "gclid",
+}
 
 _KIND_BY_SOURCE = {
     "hackernews": "forum",

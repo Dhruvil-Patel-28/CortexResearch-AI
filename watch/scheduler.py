@@ -21,7 +21,7 @@ import logging
 import threading
 import time
 import traceback
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from store import db
 from utils.config import settings
@@ -71,7 +71,7 @@ def _as_job_record(cycle: dict, status: str = "done", error: str | None = None) 
         {
             **cycle,
             "error": error,
-            "ran_at": datetime.now(timezone.utc).isoformat(),
+            "ran_at": datetime.now(UTC).isoformat(),
             "status": status,
         },
     )
@@ -121,7 +121,9 @@ def build_scheduler():
 def main() -> int:
     parser = argparse.ArgumentParser(description="CortexResearch scheduler worker")
     parser.add_argument("--once", action="store_true", help="Run one full cycle and exit")
-    parser.add_argument("--no-digest", action="store_true", help="Skip the digest step (with --once)")
+    parser.add_argument(
+        "--no-digest", action="store_true", help="Skip the digest step (with --once)"
+    )
     args = parser.parse_args()
 
     logging.basicConfig(

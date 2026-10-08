@@ -7,11 +7,15 @@ from watch.dedupe import assign_clusters, jaccard, tokens
 
 
 def item(title: str, url: str = "", source: str = "hn", ext: str = "1") -> FeedItem:
-    return FeedItem(source=source, title=title, url=url or f"https://example.com/{ext}", external_id=ext)
+    return FeedItem(
+        source=source, title=title, url=url or f"https://example.com/{ext}", external_id=ext
+    )
 
 
 def test_tokens_strips_prefixes_and_stopwords():
-    assert tokens("Show HN: An open-source agent framework") == tokens("An open-source agent framework")
+    assert tokens("Show HN: An open-source agent framework") == tokens(
+        "An open-source agent framework"
+    )
     assert tokens("New: A tool for evals") == tokens("A tool for evals")
     assert "the" not in tokens("The future of agents")
 
@@ -25,7 +29,11 @@ def test_same_story_across_sources_clusters():
     items = [
         item("Mistral Large 4 released with open weights", source="hn", ext="h1"),
         item("Mistral Large 4 released with open weights", source="rss", ext="r1"),
-        item("Mistral Large 4 released with open weights and faster inference", source="rss", ext="r2"),
+        item(
+            "Mistral Large 4 released with open weights and faster inference",
+            source="rss",
+            ext="r2",
+        ),
     ]
     mapping = assign_clusters(items)
     assert len(set(mapping.values())) == 1

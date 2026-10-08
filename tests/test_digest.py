@@ -7,7 +7,7 @@ digest is built from them.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import ClassVar, Self
 
 import pytest
@@ -26,14 +26,23 @@ def store_db(tmp_path, monkeypatch):
     return path
 
 
-def _seed_item(item_id: str, *, title: str, source: str, score: float | None,
-               hours_ago: float = 2, url: str | None = None,
-               cluster_key: str | None = None, rationale: str = "you should care",
-               path: str | None = None, published_at: str | None = None) -> str:
+def _seed_item(
+    item_id: str,
+    *,
+    title: str,
+    source: str,
+    score: float | None,
+    hours_ago: float = 2,
+    url: str | None = None,
+    cluster_key: str | None = None,
+    rationale: str = "you should care",
+    path: str | None = None,
+    published_at: str | None = None,
+) -> str:
     """Seed one item (+ optional score). Returns the stored item id."""
     from sources.base import FeedItem
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     stamp = published_at or (now - timedelta(hours=hours_ago)).isoformat()
     item = FeedItem(
         source=source,
@@ -48,15 +57,17 @@ def _seed_item(item_id: str, *, title: str, source: str, score: float | None,
     store.upsert_items([item], path=path)
     if score is not None:
         store.save_scores(
-            [{
-                "item_id": item.id,
-                "relevance": score,
-                "rationale": rationale,
-                "tags": ["ai"],
-                "model": "test",
-                "profile_version": "test",
-                "scored_at": stamp,
-            }],
+            [
+                {
+                    "item_id": item.id,
+                    "relevance": score,
+                    "rationale": rationale,
+                    "tags": ["ai"],
+                    "model": "test",
+                    "profile_version": "test",
+                    "scored_at": stamp,
+                }
+            ],
             path=path,
         )
     return item.id
@@ -83,10 +94,12 @@ def test_digest_collects_only_scored_items_above_threshold(store_db):
 
     from watch.digest import collect_digest_items
 
-    since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    since = (datetime.now(UTC) - timedelta(days=7)).isoformat()
     items = collect_digest_items(since=since, min_score=6.0, limit=10)
 
-    assert [i["id"] for i in items] == [id_hi, id_mid], "unscored and low-score items must not appear"
+    assert [i["id"] for i in items] == [id_hi, id_mid], (
+        "unscored and low-score items must not appear"
+    )
 
 
 def test_digest_persists_and_anchors_next_digest_on_it(store_db, monkeypatch):
@@ -115,8 +128,13 @@ def test_digest_persists_and_anchors_next_digest_on_it(store_db, monkeypatch):
 def test_delta_detects_reheated_clusters(store_db):
     from watch.digest import build_digest, collect_digest_items, compute_delta
 
-    _seed_item("c1", title="Mistral ships a model", source="hackernews",
-               score=8.0, cluster_key="cluster-mistral")
+    _seed_item(
+        "c1",
+        title="Mistral ships a model",
+        source="hackernews",
+        score=8.0,
+        cluster_key="cluster-mistral",
+    )
     first = build_digest(persist=True)
     assert first["delta"]["reheated"] == []
 
@@ -124,8 +142,14 @@ def test_delta_detects_reheated_clusters(store_db):
     # the first digest was created (so it clears the digest-time boundary).
     boundary = store.last_digest()["created_at"]
     later = (datetime.fromisoformat(boundary) + timedelta(seconds=5)).isoformat()
-    _seed_item("c2", title="Mistral ships a model (TechCrunch)", source="rss",
-               score=9.0, cluster_key="cluster-mistral", published_at=later)
+    _seed_item(
+        "c2",
+        title="Mistral ships a model (TechCrunch)",
+        source="rss",
+        score=9.0,
+        cluster_key="cluster-mistral",
+        published_at=later,
+    )
     _seed_item("c3", title="Brand new story", source="reddit", score=8.8, published_at=later)
 
     previous = store.last_digest()
@@ -136,7 +160,9 @@ def test_delta_detects_reheated_clusters(store_db):
 
     assert delta["new_clusters"] >= 1, "the brand-new story counts as new"
     reheated_titles = [r["title"] for r in delta["reheated"]]
-    assert any("Mistral" in t for t in reheated_titles), "re-sighted cluster with new evidence is re-heated"
+    assert any("Mistral" in t for t in reheated_titles), (
+        "re-sighted cluster with new evidence is re-heated"
+    )
 
 
 def test_preview_digest_persists_nothing(store_db):
@@ -186,7 +212,9 @@ def test_scheduler_cycle_runs_ingest_score_digest(store_db, monkeypatch):
 
     jobs = store.list_jobs(limit=5)
     assert any(j["kind"] == "scheduled_cycle" for j in jobs), "cycles are recorded as job rows"
-    assert all(j["kind"] != "scheduled_cycle" or j["status"] == "pending" or j["status"] for j in jobs)
+    assert all(
+        j["kind"] != "scheduled_cycle" or j["status"] == "pending" or j["status"] for j in jobs
+    )
 
 
 def test_digest_api_contract(client):
@@ -296,7 +324,9 @@ def test_email_escapes_html_and_splits_recipients(store_db, smtp_env, monkeypatc
     html = smtp_env["message"].get_body(preferencelist=("html",)).get_content()
     assert "<script>alert(1)</script>" not in html, "titles are escaped, not injected"
     assert "&lt;script&gt;" in html
-    assert "RAG <script>alert(1)</script> & friends" in built["markdown"], "markdown keeps the raw title"
+    assert "RAG <script>alert(1)</script> & friends" in built["markdown"], (
+        "markdown keeps the raw title"
+    )
 
 
 def test_email_failure_never_breaks_the_digest(store_db, monkeypatch):

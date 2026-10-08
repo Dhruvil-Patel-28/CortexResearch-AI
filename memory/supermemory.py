@@ -75,6 +75,4 @@ def get_memory() -> SupermemoryMemory | None:
     """The configured memory client, or None when the flag is off."""
     if not settings.enable_supermemory or not settings.supermemory_url.strip():
         return None
-    return SupermemoryMemory(
-        settings.supermemory_url.strip(), settings.supermemory_api_key.strip()
-    )
+    return SupermemoryMemory(settings.supermemory_url.strip(), settings.supermemory_api_key.strip())

@@ -285,7 +285,10 @@ async def delete_report(brief_id: str):
 
 
 @router.get("/reports/{brief_id}/export")
-async def export_report(brief_id: str, format: Literal["md", "json"] = "md"):
+async def export_report(
+    brief_id: str,
+    export_format: Literal["md", "json"] = Query(default="md", alias="format"),
+):
     """Export a report as Markdown or raw JSON."""
     brief = await asyncio.to_thread(db.get_brief, brief_id)
     if not brief:
@@ -298,7 +301,7 @@ async def export_report(brief_id: str, format: Literal["md", "json"] = "md"):
         raise HTTPException(status_code=409, detail=f"Stored report is not exportable: {e}") from e
 
     filename = render_filename(report)
-    if format == "json":
+    if export_format == "json":
         return PlainTextResponse(
             json.dumps(report.model_dump(), ensure_ascii=False, indent=2),
             media_type="application/json",

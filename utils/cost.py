@@ -96,7 +96,9 @@ class CostMeter:
         return list(self.calls)
 
 
-def invoke_llm(llm: Any, messages: list[Any], meter: CostMeter | None = None, label: str = "") -> Any:
+def invoke_llm(
+    llm: Any, messages: list[Any], meter: CostMeter | None = None, label: str = ""
+) -> Any:
     """
     Invoke an LLM and record its usage on the meter.
 

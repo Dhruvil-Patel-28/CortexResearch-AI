@@ -22,9 +22,15 @@ def main() -> int:
     )
 
     parser = argparse.ArgumentParser(description="CortexResearch watch runner")
-    parser.add_argument("--ingest", action="store_true", help="fetch new items from all enabled sources")
-    parser.add_argument("--score", action="store_true", help="LLM-score unscored items against the profile")
-    parser.add_argument("--status", action="store_true", help="show store stats and last ingest time")
+    parser.add_argument(
+        "--ingest", action="store_true", help="fetch new items from all enabled sources"
+    )
+    parser.add_argument(
+        "--score", action="store_true", help="LLM-score unscored items against the profile"
+    )
+    parser.add_argument(
+        "--status", action="store_true", help="show store stats and last ingest time"
+    )
     args = parser.parse_args()
 
     if args.status:

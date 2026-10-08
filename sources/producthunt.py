@@ -22,9 +22,9 @@ class ProductHuntAdapter(SourceAdapter):
         try:
             resp = http_get(FEED, timeout=15.0)
         except Exception as e:  # noqa: BLE001
-            logger.warning(f"Product Hunt feed failed: {e}")
+            logger.warning("Product Hunt feed failed: %s", e)
             return []
 
         items = parse_rss_feed(resp.text, feed_name="Product Hunt", source="producthunt")
-        logger.info(f"Product Hunt: {len(items)} launches")
+        logger.info("Product Hunt: %s launches", len(items))
         return items[:limit]

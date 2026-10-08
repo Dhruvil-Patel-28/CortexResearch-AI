@@ -10,7 +10,14 @@ class SequenceRouter(S1S2Router):
     """Returns canned decisions in order (domain, then kb_relevance)."""
 
     def __init__(self, labels: list[str]) -> None:
-        super().__init__(backend=None, fallback=None, escalate=None, threshold=0.75, log=DecisionLog(), breaker=CircuitBreaker())
+        super().__init__(
+            backend=None,
+            fallback=None,
+            escalate=None,
+            threshold=0.75,
+            log=DecisionLog(),
+            breaker=CircuitBreaker(),
+        )
         self._labels = list(labels)
         self.requests: list[S1Request] = []
 
@@ -49,7 +56,14 @@ def test_planner_prompt_contains_hint(monkeypatch):
 def test_classification_failure_is_non_fatal(monkeypatch):
     class BoomRouter(S1S2Router):
         def __init__(self) -> None:
-            super().__init__(backend=None, fallback=None, escalate=None, threshold=0.75, log=DecisionLog(), breaker=CircuitBreaker())
+            super().__init__(
+                backend=None,
+                fallback=None,
+                escalate=None,
+                threshold=0.75,
+                log=DecisionLog(),
+                breaker=CircuitBreaker(),
+            )
 
         def decide(self, request: S1Request) -> Decision:
             raise RuntimeError("jev down")

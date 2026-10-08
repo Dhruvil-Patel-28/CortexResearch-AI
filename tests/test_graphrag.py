@@ -16,7 +16,9 @@ class FakeLightRAG:
     instances: ClassVar[list[FakeLightRAG]] = []
     query_answer: ClassVar[str] = "graph says: connected"
 
-    def __init__(self, working_dir="", llm_model_func=None, llm_model_name=None, embedding_func=None):
+    def __init__(
+        self, working_dir="", llm_model_func=None, llm_model_name=None, embedding_func=None
+    ):
         self.working_dir = working_dir
         self.llm_model_func = llm_model_func
         self.llm_model_name = llm_model_name
@@ -119,7 +121,9 @@ def test_embedding_func_embeds_texts(fake_lightrag, graph_enabled, monkeypatch):
     import rag.retriever as retriever_mod
 
     monkeypatch.setattr(
-        retriever_mod, "get_embedder", lambda: lambda texts: np.zeros((len(texts), 384), dtype="float32")
+        retriever_mod,
+        "get_embedder",
+        lambda: lambda texts: np.zeros((len(texts), 384), dtype="float32"),
     )
     vectors = asyncio.run(rag.embedding_func.func(["a", "b"]))
     assert vectors.shape == (2, 384)
@@ -174,7 +178,9 @@ def test_index_docs_disabled_noop(fake_lightrag, monkeypatch):
     assert FakeLightRAG.instances == []
 
 
-def test_retriever_rebuild_triggers_graph_indexing(fake_lightrag, graph_enabled, monkeypatch, tmp_path):
+def test_retriever_rebuild_triggers_graph_indexing(
+    fake_lightrag, graph_enabled, monkeypatch, tmp_path
+):
     """Auto-reindex fans new docs out to the graph (already flag-guarded)."""
     called_with = []
     monkeypatch.setattr(fake_lightrag, "index_docs", lambda docs: called_with.append(list(docs)))

@@ -6,7 +6,16 @@ import time
 import httpx
 import pytest
 
-from utils.system1 import JevBackend, JevError, S1Request
+from utils.system1 import (
+    CircuitBreaker,
+    Decision,
+    DecisionLog,
+    JevBackend,
+    JevError,
+    LocalCalibratedBackend,
+    S1Request,
+    S1S2Router,
+)
 
 
 def _client(handler: httpx.MockTransport, timeout_s: float = 5.0) -> JevBackend:
@@ -71,9 +80,9 @@ def test_jev_sends_the_real_systemone_contract() -> None:
 
 
 def test_jev_happy_path_maps_choice_to_decision() -> None:
-    decision = _client(httpx.MockTransport(lambda r: httpx.Response(200, json=_choice_response()))).decide(
-        _request()
-    )
+    decision = _client(
+        httpx.MockTransport(lambda r: httpx.Response(200, json=_choice_response()))
+    ).decide(_request())
     assert decision.label == "high"
     assert decision.score == pytest.approx(0.9), "score is the chosen option's probability"
     assert decision.confidence == pytest.approx(0.82)
@@ -136,12 +145,18 @@ def test_jev_timeout_raises() -> None:
 
 # ── LocalCalibratedBackend ────────────────────────────────────────────
 
-from utils.system1 import LocalCalibratedBackend
-
-TECH = ["kubernetes cluster autoscaling devops pipeline", "devops observability kubernetes rollout",
-        "kubernetes operator devops incident", "terraform kubernetes devops deploy"]
-NOT_TECH = ["celebrity recipe pasta dinner", "recipe for celebrity bake off",
-            "celebrity chef recipe show", "pasta recipe celebrity kitchen"]
+TECH = [
+    "kubernetes cluster autoscaling devops pipeline",
+    "devops observability kubernetes rollout",
+    "kubernetes operator devops incident",
+    "terraform kubernetes devops deploy",
+]
+NOT_TECH = [
+    "celebrity recipe pasta dinner",
+    "recipe for celebrity bake off",
+    "celebrity chef recipe show",
+    "pasta recipe celebrity kitchen",
+]
 
 
 def _fitted_backend(options: list[str]) -> LocalCalibratedBackend:
@@ -164,7 +179,9 @@ def test_local_backend_untrained_returns_neutral() -> None:
 def test_local_backend_learns_keyword_split() -> None:
     backend = _fitted_backend(["low", "high"])
     tech = backend.decide(S1Request(task="relevance", context=TECH[0], options=["low", "high"]))
-    not_tech = backend.decide(S1Request(task="relevance", context=NOT_TECH[0], options=["low", "high"]))
+    not_tech = backend.decide(
+        S1Request(task="relevance", context=NOT_TECH[0], options=["low", "high"])
+    )
     assert tech.score > not_tech.score
     assert tech.score > 0.7
     assert not_tech.score < 0.3
@@ -173,8 +190,14 @@ def test_local_backend_learns_keyword_split() -> None:
 
 def test_local_backend_respects_options_order() -> None:
     backend = _fitted_backend(["low", "high"])
-    assert backend.decide(S1Request(task="t", context=TECH[0], options=["low", "high"])).label == "high"
-    assert backend.decide(S1Request(task="t", context=NOT_TECH[0], options=["low", "high"])).label == "low"
+    assert (
+        backend.decide(S1Request(task="t", context=TECH[0], options=["low", "high"])).label
+        == "high"
+    )
+    assert (
+        backend.decide(S1Request(task="t", context=NOT_TECH[0], options=["low", "high"])).label
+        == "low"
+    )
 
 
 def test_local_backend_undertrained_stays_neutral() -> None:
@@ -186,13 +209,6 @@ def test_local_backend_undertrained_stays_neutral() -> None:
 
 # ── Router / breaker / log ────────────────────────────────────────────
 
-from utils.system1 import (
-    CircuitBreaker,
-    Decision,
-    DecisionLog,
-    S1S2Router,
-)
-
 
 def _stub_backend(label: str = "high", confidence: float = 0.9) -> LocalCalibratedBackend:
     class Stub:
@@ -201,7 +217,9 @@ def _stub_backend(label: str = "high", confidence: float = 0.9) -> LocalCalibrat
 
         def decide(self, request: S1Request) -> Decision:
             self.calls += 1
-            return Decision(label=label, score=0.9, confidence=confidence, backend="stub", latency_ms=1)
+            return Decision(
+                label=label, score=0.9, confidence=confidence, backend="stub", latency_ms=1
+            )
 
     return Stub()  # type: ignore[return-value]
 
@@ -213,7 +231,14 @@ def test_router_disabled_goes_straight_to_s2() -> None:
         calls.append(request)
         return Decision(label="high", score=0.8, confidence=1.0, backend="s2:fast", latency_ms=5)
 
-    router = S1S2Router(backend=None, fallback=None, escalate=escalate, threshold=0.75, log=DecisionLog(), breaker=CircuitBreaker())
+    router = S1S2Router(
+        backend=None,
+        fallback=None,
+        escalate=escalate,
+        threshold=0.75,
+        log=DecisionLog(),
+        breaker=CircuitBreaker(),
+    )
     decision = router.decide(_request())
     assert decision.backend == "s2:fast"
     assert decision.escalated is False
@@ -225,7 +250,14 @@ def test_router_escalates_on_low_confidence() -> None:
         return Decision(label="high", score=0.8, confidence=1.0, backend="s2:fast", latency_ms=5)
 
     backend = _stub_backend(confidence=0.4)
-    router = S1S2Router(backend=backend, fallback=None, escalate=escalate, threshold=0.75, log=DecisionLog(), breaker=CircuitBreaker())
+    router = S1S2Router(
+        backend=backend,
+        fallback=None,
+        escalate=escalate,
+        threshold=0.75,
+        log=DecisionLog(),
+        breaker=CircuitBreaker(),
+    )
     decision = router.decide(_request())
     assert decision.escalated is True
     assert decision.backend == "s2:fast"
@@ -236,7 +268,14 @@ def test_router_keeps_high_confidence() -> None:
         raise AssertionError("should not escalate")
 
     backend = _stub_backend(confidence=0.9)
-    router = S1S2Router(backend=backend, fallback=None, escalate=escalate, threshold=0.75, log=DecisionLog(), breaker=CircuitBreaker())
+    router = S1S2Router(
+        backend=backend,
+        fallback=None,
+        escalate=escalate,
+        threshold=0.75,
+        log=DecisionLog(),
+        breaker=CircuitBreaker(),
+    )
     decision = router.decide(_request())
     assert decision.escalated is False
     assert decision.backend == "stub"
@@ -253,7 +292,14 @@ def test_circuit_breaker_trips_after_three_failures() -> None:
 
     failing = Failing()
     fallback = _stub_backend(label="low", confidence=0.6)
-    router = S1S2Router(backend=failing, fallback=fallback, escalate=None, threshold=0.75, log=DecisionLog(), breaker=CircuitBreaker())
+    router = S1S2Router(
+        backend=failing,
+        fallback=fallback,
+        escalate=None,
+        threshold=0.75,
+        log=DecisionLog(),
+        breaker=CircuitBreaker(),
+    )
     for _ in range(3):
         decision = router.decide(_request())
         assert decision.backend == "stub"
@@ -266,7 +312,9 @@ def test_circuit_breaker_trips_after_three_failures() -> None:
 def test_log_ring_buffer() -> None:
     log = DecisionLog()
     for i in range(7):
-        log.add(_request(), Decision(label="x", score=0.5, confidence=0.5, backend="stub", latency_ms=i))
+        log.add(
+            _request(), Decision(label="x", score=0.5, confidence=0.5, backend="stub", latency_ms=i)
+        )
     recent = log.recent(5)
     assert len(recent) == 5
     assert [r["latency_ms"] for r in recent] == [2, 3, 4, 5, 6]
@@ -279,13 +327,20 @@ def test_fetch_score_history_joins_items(tmp_path) -> None:
 
     path = str(tmp_path / "t.db")
     store_db.init_db(path)
-    i1 = FeedItem(source="hackernews", title="Kubernetes devops", url="https://x/1", raw_text="cluster text")
-    i2 = FeedItem(source="hackernews", title="Celebrity recipe", url="https://x/2", raw_text="pasta")
+    i1 = FeedItem(
+        source="hackernews", title="Kubernetes devops", url="https://x/1", raw_text="cluster text"
+    )
+    i2 = FeedItem(
+        source="hackernews", title="Celebrity recipe", url="https://x/2", raw_text="pasta"
+    )
     store_db.upsert_items([i1, i2], path=path)
-    store_db.save_scores([
-        {"item_id": i1.id, "relevance": 9.0, "profile_version": "v1"},
-        {"item_id": i2.id, "relevance": 2.0, "profile_version": "v1"},
-    ], path=path)
+    store_db.save_scores(
+        [
+            {"item_id": i1.id, "relevance": 9.0, "profile_version": "v1"},
+            {"item_id": i2.id, "relevance": 2.0, "profile_version": "v1"},
+        ],
+        path=path,
+    )
     rows = store_db.fetch_score_history(path=path)
     texts = dict(rows)
     assert texts["Kubernetes devops cluster text"] == 9.0

@@ -123,7 +123,9 @@ def test_langfuse_failure_swallowed(monkeypatch):
         def __init__(self, **kwargs):
             raise RuntimeError("langfuse down")
 
-    monkeypatch.setattr(tracing, "_build_client", lambda: (_ for _ in ()).throw(RuntimeError("down")))
+    monkeypatch.setattr(
+        tracing, "_build_client", lambda: (_ for _ in ()).throw(RuntimeError("down"))
+    )
     trace = tracing.RunTrace.start("q", "brief")
     assert not trace.enabled  # degraded to no-op, never raised
 

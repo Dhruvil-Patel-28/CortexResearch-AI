@@ -83,7 +83,5 @@ def web_search(query: str) -> str:
     if not results:
         return "No results found for this search query."
 
-    blocks = [
-        f"[Source: {r['title']}]\nURL: {r['url']}\n{r['snippet']}" for r in results
-    ]
+    blocks = [f"[Source: {r['title']}]\nURL: {r['url']}\n{r['snippet']}" for r in results]
     return "\n\n---\n\n".join(blocks)

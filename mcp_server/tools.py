@@ -11,7 +11,7 @@ All tools are read-only except `start_research`, which fires a research job
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from store import db
@@ -19,7 +19,7 @@ from store import db
 
 def list_items(since_hours: int = 24, limit: int = 50) -> list[dict[str, Any]]:
     """Recent pulse-feed items (newest first), with scores when available."""
-    since = (datetime.now(timezone.utc) - timedelta(hours=since_hours)).isoformat()
+    since = (datetime.now(UTC) - timedelta(hours=since_hours)).isoformat()
     rows = db.list_items(since=since, limit=limit, order="newest")
     return [
         {

@@ -35,7 +35,9 @@ class ScoredItem(BaseModel):
 
     item_index: int = Field(description="Index of the item in the numbered list (starts at 1)")
     relevance: float = Field(ge=0, le=10, description="0-10 relevance to this specific reader")
-    rationale: str = Field(description="One sentence written to the reader ('you') explaining why this matters for their goals or stack")
+    rationale: str = Field(
+        description="One sentence written to the reader ('you') explaining why this matters for their goals or stack"
+    )
     tags: list[str] = Field(default_factory=list, description="2-4 short topic tags")
 
 
@@ -48,7 +50,9 @@ class BatchScores(BaseModel):
 class Rationale(BaseModel):
     """Lazy rationale for one already-scored item."""
 
-    rationale: str = Field(description="One sentence written to the reader ('you') explaining why this matters for their goals or stack")
+    rationale: str = Field(
+        description="One sentence written to the reader ('you') explaining why this matters for their goals or stack"
+    )
 
 
 SCORER_PROMPT = """You score tech-news and research items for how much they matter to ONE specific reader.
@@ -75,7 +79,11 @@ def build_scorer_prompt(profile: Profile) -> str:
 
 def _item_brief(index: int, item: dict) -> str:
     metrics = item.get("metrics") or {}
-    bits = [f"{k}={v}" for k, v in metrics.items() if isinstance(v, (int, float, str)) and v not in ("", None)]
+    bits = [
+        f"{k}={v}"
+        for k, v in metrics.items()
+        if isinstance(v, (int, float, str)) and v not in ("", None)
+    ]
     meta = (" | " + ", ".join(bits[:4])) if bits else ""
     text = (item.get("raw_text") or "").strip().replace("\n", " ")[:400]
     return (
@@ -209,7 +217,13 @@ def score_unscored(limit: int | None = None, progress=None) -> dict:
     _emit("score_started", {"candidates": len(fresh), "cached": skipped_cached})
 
     if not fresh:
-        return {"scored": 0, "skipped_cached": skipped_cached, "skipped_muted": skipped_muted, "batches": 0, "errors": 0}
+        return {
+            "scored": 0,
+            "skipped_cached": skipped_cached,
+            "skipped_muted": skipped_muted,
+            "batches": 0,
+            "errors": 0,
+        }
 
     if settings.s1_enabled:
         scored = 0
@@ -222,7 +236,7 @@ def score_unscored(limit: int | None = None, progress=None) -> dict:
                 _emit("score_batch_done", {"scored": scored, "of": len(fresh)})
             except Exception as e:  # noqa: BLE001 — one bad item must not kill the run
                 errors += 1
-                logger.warning(f"S1 scoring failed for item: {e}")
+                logger.warning("S1 scoring failed for item: %s", e)
         result = {
             "scored": scored,
             "skipped_cached": skipped_cached,
@@ -232,7 +246,7 @@ def score_unscored(limit: int | None = None, progress=None) -> dict:
             "profile_version": load_profile().version,
             "model": "s1-router",
         }
-        logger.info(f"Scoring done: {result}")
+        logger.info("Scoring done: %s", result)
         _emit("score_done", result)
         return result
 
@@ -253,7 +267,7 @@ def score_unscored(limit: int | None = None, progress=None) -> dict:
             _emit("score_batch_done", {"scored": scored, "of": len(fresh)})
         except Exception as e:  # noqa: BLE001 — one bad batch must not kill the run
             errors += 1
-            logger.warning(f"Scoring batch failed: {e}")
+            logger.warning("Scoring batch failed: %s", e)
 
     result = {
         "scored": scored,
@@ -264,6 +278,6 @@ def score_unscored(limit: int | None = None, progress=None) -> dict:
         "profile_version": profile.version,
         "model": settings.model_fast,
     }
-    logger.info(f"Scoring done: {result}")
+    logger.info("Scoring done: %s", result)
     _emit("score_done", result)
     return result

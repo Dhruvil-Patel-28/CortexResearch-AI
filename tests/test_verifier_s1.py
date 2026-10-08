@@ -11,17 +11,31 @@ from utils.system1 import CircuitBreaker, Decision, DecisionLog, S1Request, S1S2
 
 class StubRouter(S1S2Router):
     def __init__(self, label: str, confidence: float) -> None:
-        super().__init__(backend=None, fallback=None, escalate=None, threshold=0.75, log=DecisionLog(), breaker=CircuitBreaker())
+        super().__init__(
+            backend=None,
+            fallback=None,
+            escalate=None,
+            threshold=0.75,
+            log=DecisionLog(),
+            breaker=CircuitBreaker(),
+        )
         self.label = label
         self.confidence = confidence
 
     def decide(self, request: S1Request) -> Decision:
-        return Decision(label=self.label, score=0.9, confidence=self.confidence, backend="stub", latency_ms=1)
+        return Decision(
+            label=self.label, score=0.9, confidence=self.confidence, backend="stub", latency_ms=1
+        )
 
 
 def _pending(n: int) -> list[dict]:
     return [
-        {"id": f"c{i}", "claim": f"claim {i}", "evidence": "evidence", "sources": "[s1] Source — https://x\nquote text"}
+        {
+            "id": f"c{i}",
+            "claim": f"claim {i}",
+            "evidence": "evidence",
+            "sources": "[s1] Source — https://x\nquote text",
+        }
         for i in range(1, n + 1)
     ]
 
@@ -53,13 +67,19 @@ def test_low_confidence_claims_grouped_into_one_s2_call(monkeypatch):
         calls.append(1)
         pending = kw["user"]
         ids = [line for line in pending.splitlines() if line.startswith("c")]
-        return VerifierOutput(verdicts=[ClaimVerdict(id=i, supported=False, reason="weak") for i in ids], notes="mixed")
+        return VerifierOutput(
+            verdicts=[ClaimVerdict(id=i, supported=False, reason="weak") for i in ids],
+            notes="mixed",
+        )
 
     monkeypatch.setattr(verifier, "call_json", fake_call_json)
     verdicts, notes = verifier._judge(_pending(3), meter=None, state=_state())
     assert calls == [1]  # all three low-confidence claims in ONE chat call
     assert verdicts["c2"].supported is False
-    assert verdicts["c2"].backend == f"s2:{__import__('utils.config', fromlist=['settings']).settings.model_fast}"
+    assert (
+        verdicts["c2"].backend
+        == f"s2:{__import__('utils.config', fromlist=['settings']).settings.model_fast}"
+    )
     assert verdicts["c2"].confidence == 1.0
     assert notes == "mixed"
 
@@ -91,7 +111,9 @@ def test_s1_disabled_uses_legacy_judge(monkeypatch):
 
     def fake_call_json(llm, **kw):
         calls.append(1)
-        return VerifierOutput(verdicts=[ClaimVerdict(id="c1", supported=True, reason="ok")], notes="fine")
+        return VerifierOutput(
+            verdicts=[ClaimVerdict(id="c1", supported=True, reason="ok")], notes="fine"
+        )
 
     monkeypatch.setattr(verifier, "call_json", fake_call_json)
     verdicts, notes = verifier._judge(_pending(1), meter=None, state=_state())

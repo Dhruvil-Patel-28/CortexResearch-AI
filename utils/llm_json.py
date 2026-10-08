@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from typing import Any, TypeVar
+from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, ValidationError
@@ -21,8 +21,6 @@ from pydantic import BaseModel, ValidationError
 from utils.cost import CostMeter, invoke_llm
 
 logger = logging.getLogger(__name__)
-
-T = TypeVar("T", bound=BaseModel)
 
 _FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)
 
@@ -148,7 +146,7 @@ def _repair_truncated(fragment: str, *, max_cuts: int = 60) -> dict[str, Any] | 
     return None
 
 
-def call_json(
+def call_json[T: BaseModel](
     llm: Any,
     *,
     system: str,
@@ -190,7 +188,8 @@ def call_json(
         content = response.content
         if isinstance(content, list):  # Anthropic content blocks
             content = "".join(
-                block.get("text", "") if isinstance(block, dict) else str(block) for block in content
+                block.get("text", "") if isinstance(block, dict) else str(block)
+                for block in content
             )
         try:
             return schema.model_validate(json_object_from(str(content)))

@@ -105,8 +105,15 @@ def run_research(
 
     with tracing.active_trace(query, depth, job_id=session_id) as run_trace:
         return _run_pipeline(
-            query=query, depth=depth, session_id=session_id, item_id=item_id,
-            emit=emit, run_trace=run_trace, meter=meter, started=started, gr_start=gr_start,
+            query=query,
+            depth=depth,
+            session_id=session_id,
+            item_id=item_id,
+            emit=emit,
+            run_trace=run_trace,
+            meter=meter,
+            started=started,
+            gr_start=gr_start,
         )
 
 
@@ -123,9 +130,14 @@ def _with_memory_recall(query: str, session_context: str) -> str:
 
 
 def _run_pipeline(*, query, depth, session_id, item_id, emit, run_trace, meter, started, gr_start):
-    logger.info("Research v2 starting | depth=%s | session=%s | query=%s", depth, session_id, query[:120])
+    logger.info(
+        "Research v2 starting | depth=%s | session=%s | query=%s", depth, session_id, query[:120]
+    )
     if emit:
-        emit("run_started", {"type": "run_started", "query": query, "depth": depth, "item_id": item_id})
+        emit(
+            "run_started",
+            {"type": "run_started", "query": query, "depth": depth, "item_id": item_id},
+        )
 
     initial_state: ResearchState = {
         "messages": [],
@@ -172,7 +184,13 @@ def _run_pipeline(*, query, depth, session_id, item_id, emit, run_trace, meter, 
             "report": report.model_dump(),
             "citations": [],
             "agent_steps": [],
-            "verification": {"checked": 0, "supported": 0, "unsupported": 0, "unsupported_claims": [], "notes": "run failed"},
+            "verification": {
+                "checked": 0,
+                "supported": 0,
+                "unsupported": 0,
+                "unsupported_claims": [],
+                "notes": "run failed",
+            },
             "cost_usd": meter.total_usd,
             "model_trace": report.model_trace,
             "error": str(exc),
@@ -181,9 +199,15 @@ def _run_pipeline(*, query, depth, session_id, item_id, emit, run_trace, meter, 
 
     report = _finalise_report(final_state, query=query, depth=depth, meter=meter, started=started)
     report.model_trace = guardrail_trace.attach_guardrail_trace(report.model_trace, gr_start)
-    verification = report.verification.model_dump() if hasattr(report.verification, "model_dump") else dict(final_state.get("verification") or {})
+    verification = (
+        report.verification.model_dump()
+        if hasattr(report.verification, "model_dump")
+        else dict(final_state.get("verification") or {})
+    )
 
-    session_manager.add_interaction(session_id, query, report.executive_summary[:500] or report.title)
+    session_manager.add_interaction(
+        session_id, query, report.executive_summary[:500] or report.title
+    )
 
     result = {
         "session_id": session_id,
@@ -234,7 +258,11 @@ def _run_pipeline(*, query, depth, session_id, item_id, emit, run_trace, meter, 
         checked = verification.get("checked", 0)
         supported = verification.get("supported", 0)
         if checked:
-            run_trace.score("verification", round(supported / checked, 3), f"{supported}/{checked} claims supported")
+            run_trace.score(
+                "verification",
+                round(supported / checked, 3),
+                f"{supported}/{checked} claims supported",
+            )
         run_trace.score("cost_usd", round(report.cost_usd, 4))
         run_trace.finish("ok")
     return result
@@ -264,7 +292,9 @@ def _finalise_report(
 
         report.verification = Verification.model_validate(verification)
     elif report.verification.checked == 0:
-        report.verification.notes = report.verification.notes or "This run completed without a verification pass."
+        report.verification.notes = (
+            report.verification.notes or "This run completed without a verification pass."
+        )
 
     logger.debug("Report finalised in %.1fs", time.time() - started)
     return report

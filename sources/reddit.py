@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import feedparser
 
@@ -36,7 +36,7 @@ def parse_reddit_rss(text: str, subreddit: str = "") -> list[FeedItem]:
 
         published = ""
         if e.get("updated_parsed"):
-            published = datetime(*e["updated_parsed"][:6], tzinfo=timezone.utc).isoformat()
+            published = datetime(*e["updated_parsed"][:6], tzinfo=UTC).isoformat()
 
         author = (e.get("author") or "").replace("/u/", "").strip()
 
@@ -70,7 +70,7 @@ class RedditAdapter(SourceAdapter):
                 resp = http_get(RSS_URL.format(sub=sub), timeout=12.0)
                 items.extend(parse_reddit_rss(resp.text, sub)[:limit])
             except Exception as e:  # noqa: BLE001 — never break the ingest run
-                logger.warning(f"Reddit r/{sub} failed: {e}")
+                logger.warning("Reddit r/%s failed: %s", sub, e)
 
-        logger.info(f"Reddit: {len(items)} posts from {len(subs)} subreddits")
+        logger.info("Reddit: %s posts from %s subreddits", len(items), len(subs))
         return items

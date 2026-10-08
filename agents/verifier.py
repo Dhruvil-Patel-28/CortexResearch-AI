@@ -88,10 +88,14 @@ def verifier_node(state: ResearchState) -> dict:
     """Check every key development against its own cited evidence."""
     draft = state.get("report_draft") or {}
     registry: dict[str, dict] = {s.get("id"): s for s in (state.get("source_registry") or [])}
-    developments = [d for d in (draft.get("key_developments") or []) if (d.get("claim") or "").strip()]
+    developments = [
+        d for d in (draft.get("key_developments") or []) if (d.get("claim") or "").strip()
+    ]
     meter: CostMeter | None = state.get("meter")
 
-    emit_event(state, "stage", stage="verifying", label=f"Verifying {len(developments)} claims", pct=76)
+    emit_event(
+        state, "stage", stage="verifying", label=f"Verifying {len(developments)} claims", pct=76
+    )
 
     if not developments:
         verification = {
@@ -101,7 +105,9 @@ def verifier_node(state: ResearchState) -> dict:
             "unsupported_claims": [],
             "notes": "The draft contained no verifiable claims.",
         }
-        emit_event(state, "verification", verification=verification, label="Nothing to verify", pct=80)
+        emit_event(
+            state, "verification", verification=verification, label="Nothing to verify", pct=80
+        )
         return {
             "verification": verification,
             "completed_agents": ["Verifier"],
@@ -123,7 +129,9 @@ def verifier_node(state: ResearchState) -> dict:
         known = [sid for sid in cited if sid in registry]
 
         if not cited:
-            unsupported.append({"claim": claim, "reason": "No source cited for this claim.", "action": "flagged"})
+            unsupported.append(
+                {"claim": claim, "reason": "No source cited for this claim.", "action": "flagged"}
+            )
         elif not known:
             unsupported.append(
                 {
@@ -176,7 +184,9 @@ def verifier_node(state: ResearchState) -> dict:
         "notes": notes or f"{supported_count}/{checked} claims supported by their cited evidence.",
     }
 
-    emit_event(state, "verification", verification=verification, label=verification["notes"], pct=80)
+    emit_event(
+        state, "verification", verification=verification, label=verification["notes"], pct=80
+    )
     logger.info("Verifier: %s/%s claims supported", supported_count, checked)
 
     step = {
@@ -188,7 +198,9 @@ def verifier_node(state: ResearchState) -> dict:
     return {"verification": verification, "completed_agents": ["Verifier"], "agent_steps": [step]}
 
 
-def _judge(pending: list[dict], *, meter: CostMeter | None, state=None) -> tuple[dict[str, ClaimVerdict], str]:
+def _judge(
+    pending: list[dict], *, meter: CostMeter | None, state=None
+) -> tuple[dict[str, ClaimVerdict], str]:
     """Route each claim through S1; low-confidence claims are grouped into one
     fast-tier S2 call. With S1 disabled this is the legacy grouped call."""
     if not settings.s1_enabled:
@@ -207,7 +219,9 @@ def _judge(pending: list[dict], *, meter: CostMeter | None, state=None) -> tuple
         )[:2000]
         try:
             decision = router.decide(
-                S1Request(task="claim_support", context=context, options=["supported", "unsupported"])
+                S1Request(
+                    task="claim_support", context=context, options=["supported", "unsupported"]
+                )
             )
         except Exception as exc:  # noqa: BLE001 — router failure must not kill verification
             logger.warning("S1 claim decision failed (%s) — escalating", exc)
@@ -254,7 +268,9 @@ def _judge(pending: list[dict], *, meter: CostMeter | None, state=None) -> tuple
     return verdicts, notes
 
 
-def _judge_chat(pending: list[dict], *, meter: CostMeter | None) -> tuple[dict[str, ClaimVerdict], str]:
+def _judge_chat(
+    pending: list[dict], *, meter: CostMeter | None
+) -> tuple[dict[str, ClaimVerdict], str]:
     """Legacy grouped fast-tier judgement (also the S2 escalation path)."""
     verdicts: dict[str, ClaimVerdict] = {}
     notes = ""
@@ -291,5 +307,12 @@ Return one verdict per claim id.
         except JsonCallError as exc:
             logger.warning("Verifier call failed (%s) — treating batch as unverified", exc)
             for item in batch:
-                verdicts.setdefault(item["id"], ClaimVerdict(id=item["id"], supported=False, reason="Verification model unavailable for this claim."))
+                verdicts.setdefault(
+                    item["id"],
+                    ClaimVerdict(
+                        id=item["id"],
+                        supported=False,
+                        reason="Verification model unavailable for this claim.",
+                    ),
+                )
     return verdicts, notes

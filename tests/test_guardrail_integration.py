@@ -68,7 +68,9 @@ def test_fetch_page_text_sanitized(monkeypatch):
     class FakeResponse:
         status_code: ClassVar[int] = 200
         headers: ClassVar[dict] = {"content-type": "text/html"}
-        text: ClassVar[str] = f"<html><body><article>Useful content. {POISON}</article></body></html>"
+        text: ClassVar[str] = (
+            f"<html><body><article>Useful content. {POISON}</article></body></html>"
+        )
 
     class FakeClient:
         def __init__(self, **kwargs):

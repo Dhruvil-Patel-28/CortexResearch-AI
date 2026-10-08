@@ -45,9 +45,7 @@ def _get_client():
     """Lazily build the client; None when disabled or previously failed."""
     global _client
     if not (
-        settings.langfuse_enabled
-        and settings.langfuse_public_key
-        and settings.langfuse_secret_key
+        settings.langfuse_enabled and settings.langfuse_public_key and settings.langfuse_secret_key
     ):
         return None
     if _client is None:
@@ -90,8 +88,14 @@ class RunTrace:
             logger.debug("RunTrace.start failed: %s", exc)
             return cls(False)
 
-    def generation(self, model: str, label: str, input_tokens: int = 0,
-                   output_tokens: int = 0, latency_ms: float = 0.0) -> None:
+    def generation(
+        self,
+        model: str,
+        label: str,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+        latency_ms: float = 0.0,
+    ) -> None:
         if not self.enabled:
             return
         try:

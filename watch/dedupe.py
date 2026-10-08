@@ -17,11 +17,66 @@ from collections.abc import Iterable
 from hashlib import sha1
 
 STOPWORDS = {
-    "the", "a", "an", "and", "or", "for", "with", "from", "into", "onto", "over", "under",
-    "to", "of", "in", "on", "at", "by", "is", "are", "was", "were", "be", "been", "being",
-    "this", "that", "these", "those", "it", "its", "as", "new", "now", "how", "why", "what",
-    "you", "your", "we", "our", "us", "they", "their", "his", "her", "he", "she", "i",
-    "show", "ask", "hn", "vs", "via", "about", "after", "before", "than", "then", "so",
+    "the",
+    "a",
+    "an",
+    "and",
+    "or",
+    "for",
+    "with",
+    "from",
+    "into",
+    "onto",
+    "over",
+    "under",
+    "to",
+    "of",
+    "in",
+    "on",
+    "at",
+    "by",
+    "is",
+    "are",
+    "was",
+    "were",
+    "be",
+    "been",
+    "being",
+    "this",
+    "that",
+    "these",
+    "those",
+    "it",
+    "its",
+    "as",
+    "new",
+    "now",
+    "how",
+    "why",
+    "what",
+    "you",
+    "your",
+    "we",
+    "our",
+    "us",
+    "they",
+    "their",
+    "his",
+    "her",
+    "he",
+    "she",
+    "i",
+    "show",
+    "ask",
+    "hn",
+    "vs",
+    "via",
+    "about",
+    "after",
+    "before",
+    "than",
+    "then",
+    "so",
 }
 
 # Source-specific prefixes that add no semantic value ("Show HN:", "[AINews]", "New:")
@@ -37,7 +92,9 @@ DEFAULT_THRESHOLD = 0.62
 def tokens(title: str) -> frozenset[str]:
     """Significant lowercase tokens of a title."""
     cleaned = _PREFIX_RE.sub("", title or "")
-    return frozenset(t for t in _TOKEN_RE.findall(cleaned.lower()) if len(t) > 2 and t not in STOPWORDS)
+    return frozenset(
+        t for t in _TOKEN_RE.findall(cleaned.lower()) if len(t) > 2 and t not in STOPWORDS
+    )
 
 
 def jaccard(a: frozenset[str], b: frozenset[str]) -> float:

@@ -62,8 +62,12 @@ def _export_to_langfuse(suite: str, result) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="evals.runner", description="CortexResearch eval harness")
     parser.add_argument("--suite", choices=["guardrails", "judge", "all"], default="all")
-    parser.add_argument("--report-id", default=None, help="judge a stored report instead of the golden fixture")
-    parser.add_argument("--no-save", action="store_true", help="skip writing result files to data/evals/")
+    parser.add_argument(
+        "--report-id", default=None, help="judge a stored report instead of the golden fixture"
+    )
+    parser.add_argument(
+        "--no-save", action="store_true", help="skip writing result files to data/evals/"
+    )
     args = parser.parse_args(argv)
 
     exit_code = 0

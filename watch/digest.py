@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 import logging
 import smtplib
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
 from html import escape
 from pathlib import Path
@@ -52,11 +52,11 @@ def _since_boundary(window_hours: int | None = None) -> str:
     not repeat stories), otherwise on the lookback window.
     """
     if window_hours:
-        return (datetime.now(timezone.utc) - timedelta(hours=window_hours)).isoformat()
+        return (datetime.now(UTC) - timedelta(hours=window_hours)).isoformat()
     last = db.last_digest()
     if last:
         return last["created_at"]
-    return (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    return (datetime.now(UTC) - timedelta(days=7)).isoformat()
 
 
 def collect_digest_items(
@@ -100,7 +100,9 @@ def compute_delta(current: list[dict[str, Any]], previous: dict[str, Any] | None
         return {"new_clusters": len(current), "reheated": [], "previously_covered": 0}
 
     prev_ids = set(previous.get("item_ids") or [])
-    prev_items = {i["id"]: i for i in db.list_items(limit=500, collapse=False) if i["id"] in prev_ids}
+    prev_items = {
+        i["id"]: i for i in db.list_items(limit=500, collapse=False) if i["id"] in prev_ids
+    }
 
     current_keys = set()
     reheated: list[dict[str, Any]] = []
@@ -150,7 +152,7 @@ def render_digest_md(
     profile_name: str = "there",
 ) -> str:
     """Render the digest as Markdown."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     lines: list[str] = [
         f"# Market pulse — {now.strftime('%A, %d %B %Y')}",
         "",
@@ -221,7 +223,7 @@ def render_digest_html(
     can render: one column, inline styles, no external assets. Every piece of
     feed-supplied text is escaped — story titles are third-party input.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     muted = 'style="margin:8px 0 0;color:#4b5563;font-size:14px;line-height:1.6"'
     parts: list[str] = [
         "<!doctype html>",
@@ -246,8 +248,12 @@ def render_digest_html(
     ]
 
     if delta.get("reheated"):
-        parts.append('<h2 style="margin:28px 0 6px;font-size:15px">What changed since the last digest</h2>')
-        parts.append('<ul style="margin:0;padding-left:18px;color:#374151;font-size:14px;line-height:1.7">')
+        parts.append(
+            '<h2 style="margin:28px 0 6px;font-size:15px">What changed since the last digest</h2>'
+        )
+        parts.append(
+            '<ul style="margin:0;padding-left:18px;color:#374151;font-size:14px;line-height:1.7">'
+        )
         for entry in delta["reheated"]:
             bits = []
             if entry.get("gained_sources"):
@@ -262,7 +268,9 @@ def render_digest_html(
         parts.append("</ul>")
 
     if not items:
-        parts.append('<h2 style="margin:28px 0 6px;font-size:15px">Nothing new cleared the bar</h2>')
+        parts.append(
+            '<h2 style="margin:28px 0 6px;font-size:15px">Nothing new cleared the bar</h2>'
+        )
         parts.append(
             f"<p {muted}>No stories scored above the relevance threshold since the last digest. "
             "That is a valid result — the next ingest cycle may change it.</p>"
@@ -279,8 +287,12 @@ def render_digest_html(
             meta = [f"relevance {item['relevance']:.1f}/10"]
             if item.get("cluster_size") and item["cluster_size"] > 1:
                 meta.append(f"{item['cluster_size']} sources")
-            parts.append(f'<h3 style="margin:20px 0 2px;font-size:16px;line-height:1.4">{rank}. {title}</h3>')
-            parts.append(f'<p style="margin:0;color:#6b7280;font-size:12px">{escape(", ".join(meta))}</p>')
+            parts.append(
+                f'<h3 style="margin:20px 0 2px;font-size:16px;line-height:1.4">{rank}. {title}</h3>'
+            )
+            parts.append(
+                f'<p style="margin:0;color:#6b7280;font-size:12px">{escape(", ".join(meta))}</p>'
+            )
             if item.get("rationale"):
                 parts.append(
                     f'<p style="margin:8px 0 0;color:#374151;font-size:14px;line-height:1.6">'
@@ -316,10 +328,7 @@ def _email_configured() -> bool:
     from utils.config import settings
 
     return bool(
-        settings.smtp_host
-        and settings.smtp_user
-        and settings.smtp_password
-        and _email_recipients()
+        settings.smtp_host and settings.smtp_user and settings.smtp_password and _email_recipients()
     )
 
 
@@ -328,7 +337,7 @@ def _send_email(markdown: str, html_body: str) -> None:
     from utils.config import settings
 
     message = EmailMessage()
-    message["Subject"] = f"Market pulse digest — {datetime.now(timezone.utc).strftime('%a, %d %b %Y')}"
+    message["Subject"] = f"Market pulse digest — {datetime.now(UTC).strftime('%a, %d %b %Y')}"
     message["From"] = settings.smtp_user
     message["To"] = ", ".join(_email_recipients())
     message.set_content(markdown)
@@ -336,7 +345,9 @@ def _send_email(markdown: str, html_body: str) -> None:
         message.add_alternative(html_body, subtype="html")
 
     if settings.smtp_port == 465:  # implicit TLS
-        with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port, timeout=SMTP_TIMEOUT_S) as smtp:
+        with smtplib.SMTP_SSL(
+            settings.smtp_host, settings.smtp_port, timeout=SMTP_TIMEOUT_S
+        ) as smtp:
             smtp.login(settings.smtp_user, settings.smtp_password)
             smtp.send_message(message)
     else:  # 587 and friends upgrade with STARTTLS
@@ -372,7 +383,12 @@ def deliver(markdown: str, digest_id: str, *, html_body: str = "") -> list[str]:
 
             response = requests.post(
                 webhook,
-                json={"text": f"Market pulse digest {digest_id}", "blocks": [{"type": "section", "text": {"type": "mrkdwn", "text": markdown[:2900]}}]},
+                json={
+                    "text": f"Market pulse digest {digest_id}",
+                    "blocks": [
+                        {"type": "section", "text": {"type": "mrkdwn", "text": markdown[:2900]}}
+                    ],
+                },
                 timeout=10,
             )
             if response.status_code < 300:
@@ -455,7 +471,12 @@ def build_digest(
         remember_digest(result)
     except Exception as exc:  # noqa: BLE001 — memory is best-effort
         logger.debug("remember_digest failed: %s", exc)
-    logger.info("Digest %s built: %d stories, %d new vs previous", digest_id, len(items), delta["new_clusters"])
+    logger.info(
+        "Digest %s built: %d stories, %d new vs previous",
+        digest_id,
+        len(items),
+        delta["new_clusters"],
+    )
     return result
 
 
@@ -468,7 +489,11 @@ def build_delta_query(topic: str, *, since: str | None = None) -> str:
     """
     if not since:
         last = db.last_digest()
-        since = last["created_at"][:10] if last else (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%d")
+        since = (
+            last["created_at"][:10]
+            if last
+            else (datetime.now(UTC) - timedelta(days=7)).strftime("%Y-%m-%d")
+        )
     return (
         f"Delta brief on {topic}: what has changed since {since}? "
         f"Focus only on developments after {since} — new releases, funding, benchmarks, "

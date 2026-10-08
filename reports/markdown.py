@@ -7,7 +7,7 @@ the source HTML/PDF exporters build on.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from schemas.report import ResearchReportV2
 
@@ -56,7 +56,11 @@ def render_markdown(report: ResearchReportV2) -> str:
     if report.key_developments:
         lines += ["## Key developments", ""]
         for index, dev in enumerate(report.key_developments, 1):
-            badge = {"high": "High confidence", "medium": "Medium confidence", "low": "Low confidence"}[dev.confidence]
+            badge = {
+                "high": "High confidence",
+                "medium": "Medium confidence",
+                "low": "Low confidence",
+            }[dev.confidence]
             lines.append(f"### {index}. {dev.claim}")
             lines.append("")
             lines.append(f"*{badge}{' · ' + cite(dev.sources) if dev.sources else ' · uncited'}*")
@@ -71,7 +75,9 @@ def render_markdown(report: ResearchReportV2) -> str:
         for entry in report.timeline:
             when = (entry.when or "").replace("|", "/")
             what = (entry.what or "").replace("|", "/")
-            lines.append(f"| {when} | {what} | {cite([entry.source_id]) if entry.source_id else ''} |")
+            lines.append(
+                f"| {when} | {what} | {cite([entry.source_id]) if entry.source_id else ''} |"
+            )
         lines.append("")
 
     if report.comparison_table and report.comparison_table.columns:
@@ -122,14 +128,18 @@ def render_markdown(report: ResearchReportV2) -> str:
         lines += ["## Verification", ""]
         supported = verification.supported
         checked = verification.checked
-        lines.append(f"{supported}/{checked} load-bearing claims were checked against their cited sources.")
+        lines.append(
+            f"{supported}/{checked} load-bearing claims were checked against their cited sources."
+        )
         if verification.notes:
             lines.append("")
             lines.append(f"_{verification.notes}_")
         if verification.unsupported_claims:
             lines += ["", "Flagged claims:", ""]
             for claim in verification.unsupported_claims:
-                label = {"flagged": "flagged", "softened": "softened", "removed": "removed"}[claim.action]
+                label = {"flagged": "flagged", "softened": "softened", "removed": "removed"}[
+                    claim.action
+                ]
                 lines.append(f"- **{label}** — {claim.claim}  ")
                 lines.append(f"  _{claim.reason}_")
         lines.append("")
@@ -151,5 +161,5 @@ def render_filename(report: ResearchReportV2) -> str:
     """Filesystem-safe filename stem for exports."""
     slug = "".join(ch if ch.isalnum() or ch in " -_" else "" for ch in (report.title or "report"))
     slug = "-".join(slug.split())[:70] or "report"
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d")
+    stamp = datetime.now(UTC).strftime("%Y%m%d")
     return f"{slug}-{stamp}"

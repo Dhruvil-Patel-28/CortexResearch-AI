@@ -87,7 +87,12 @@ class RunStream:
         store.update_job(
             self.job_id,
             status=self.status,
-            progress={"stage": stage, "pct": self.pct, "events": list(self.events[-80:]), "brief_id": self.brief_id},
+            progress={
+                "stage": stage,
+                "pct": self.pct,
+                "events": list(self.events[-80:]),
+                "brief_id": self.brief_id,
+            },
         )
 
 
@@ -139,10 +144,20 @@ def start_research_job(
         {"job_id", "brief_id"} — the brief id is where the finished report lands.
     """
     query = query.strip()
-    brief_id = store.create_brief(query=query, item_id=item_id, topic_id=topic_id) if persist_brief else None
+    brief_id = (
+        store.create_brief(query=query, item_id=item_id, topic_id=topic_id)
+        if persist_brief
+        else None
+    )
     job_id = store.create_job(
         kind,
-        {"query": query, "depth": depth, "item_id": item_id, "brief_id": brief_id, "session_id": session_id},
+        {
+            "query": query,
+            "depth": depth,
+            "item_id": item_id,
+            "brief_id": brief_id,
+            "session_id": session_id,
+        },
     )
 
     run = RunStream(job_id=job_id, kind=kind, brief_id=brief_id)

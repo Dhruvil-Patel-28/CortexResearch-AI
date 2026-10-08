@@ -40,7 +40,8 @@ def emit_event(state: dict[str, Any], event_type: str, **payload: Any) -> None:
         trace = tracing.current_trace()
         if trace is not None and trace.enabled:
             scalars = {
-                k: v for k, v in payload.items()
+                k: v
+                for k, v in payload.items()
                 if isinstance(v, (str, int, float, bool)) or v is None
             }
             trace.event(event_type, scalars)
@@ -50,4 +51,9 @@ def emit_event(state: dict[str, Any], event_type: str, **payload: Any) -> None:
 
 def step_event(agent: str, action: str, **extra: Any) -> dict[str, Any]:
     """Canonical agent-step event body (also used for the persisted trace)."""
-    return {"agent_name": agent, "action": action, "tools_used": extra.pop("tools_used", []), **extra}
+    return {
+        "agent_name": agent,
+        "action": action,
+        "tools_used": extra.pop("tools_used", []),
+        **extra,
+    }

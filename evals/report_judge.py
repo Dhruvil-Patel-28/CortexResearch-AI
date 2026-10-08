@@ -37,6 +37,7 @@ class JudgePayload(BaseModel):
 
     dimensions: list[JudgeDimension] = Field(default_factory=list)
 
+
 _DIMENSION_GUIDES = {
     "groundedness": "Are the key_developments claims actually supported by their cited sources? Spot-check at least three developments against their source quotes/urls.",
     "coverage": "Does the report fill the schema-v2 sections appropriate for its depth (tldr, executive_summary, background_primer, key_developments, implications, sources)? Penalise thin or empty sections for the stated depth.",
@@ -44,17 +45,13 @@ _DIMENSION_GUIDES = {
     "citation_hygiene": "Does every key development cite at least one source? Are all cited ids resolvable in sources? (The deterministic facts below give exact counts.)",
 }
 
+
 def compute_facts(report: ResearchReportV2) -> dict:
     """Deterministic facts the judge receives as ground truth."""
     source_ids = {s.id for s in report.sources}
-    developments_without_sources = sum(
-        1 for d in report.key_developments if not d.sources
-    )
+    developments_without_sources = sum(1 for d in report.key_developments if not d.sources)
     dangling_refs = sum(
-        1
-        for d in report.key_developments
-        for sid in d.sources
-        if sid not in source_ids
+        1 for d in report.key_developments for sid in d.sources if sid not in source_ids
     )
     depth = report.depth
     expected_sections = {"tldr", "executive_summary", "key_developments", "sources"}
@@ -69,13 +66,13 @@ def compute_facts(report: ResearchReportV2) -> dict:
     missing = [
         name
         for name in sorted(expected_sections)
-        if name == "tldr" and not section_state["has_tldr"]
-        or name == "executive_summary" and not section_state["has_executive_summary"]
-        or name == "background_primer" and not section_state["has_background_primer"]
-        or name == "implications" and not section_state["has_implications"]
-        or name == "key_developments" and not report.key_developments
-        or name == "sources" and not report.sources
-        or name == "what_to_watch_next" and not report.what_to_watch_next
+        if (name == "tldr" and not section_state["has_tldr"])
+        or (name == "executive_summary" and not section_state["has_executive_summary"])
+        or (name == "background_primer" and not section_state["has_background_primer"])
+        or (name == "implications" and not section_state["has_implications"])
+        or (name == "key_developments" and not report.key_developments)
+        or (name == "sources" and not report.sources)
+        or (name == "what_to_watch_next" and not report.what_to_watch_next)
     ]
     return {
         "depth": depth,
@@ -143,9 +140,7 @@ def judge_report(report: dict | ResearchReportV2) -> JudgeResult:
             meter=meter,
             label="eval:report-judge",
         )
-        dimensions = [
-            d for d in payload.dimensions if d.name in DIMENSIONS
-        ]
+        dimensions = [d for d in payload.dimensions if d.name in DIMENSIONS]
         if len(dimensions) < len(DIMENSIONS):
             raise ValueError(f"judge returned {len(dimensions)}/{len(DIMENSIONS)} valid dimensions")
 

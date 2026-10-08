@@ -37,7 +37,12 @@ def test_remember_report_payload(fake):
     assert ok
     doc = fake.docs[0]
     assert "T" in doc["text"] and "a" in doc["text"]
-    assert doc["metadata"] == {"kind": "report", "report_id": "rep1", "query": "Q", "depth": "brief"}
+    assert doc["metadata"] == {
+        "kind": "report",
+        "report_id": "rep1",
+        "query": "Q",
+        "depth": "brief",
+    }
 
 
 def test_remember_report_noop_without_memory(monkeypatch):
@@ -50,7 +55,9 @@ def test_remember_report_noop_without_memory(monkeypatch):
 def test_remember_bookmark_payload(fake):
     from memory.remember import remember_bookmark
 
-    remember_bookmark({"id": "it1", "title": "Story", "url": "https://e.com", "source": "hn"}, "great find")
+    remember_bookmark(
+        {"id": "it1", "title": "Story", "url": "https://e.com", "source": "hn"}, "great find"
+    )
     doc = fake.docs[0]
     assert "Story" in doc["text"] and "great find" in doc["text"]
     assert doc["metadata"]["kind"] == "bookmark"

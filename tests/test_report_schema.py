@@ -10,7 +10,11 @@ def test_coerce_report_accepts_loosely_shaped_llm_json():
         {
             "title": "Model release roundup",
             "tldr": "One big takeaway",
-            "key_developments": {"claim": "Something shipped", "sources": "s1", "confidence": "HIGH"},
+            "key_developments": {
+                "claim": "Something shipped",
+                "sources": "s1",
+                "confidence": "HIGH",
+            },
             "what_to_watch_next": ["Pricing changes"],
             "sources": [{"id": "s1", "title": "Post", "url": "https://example.com/p"}],
             "verification": {"checked": 99},  # must be ignored: the pipeline computes it
@@ -75,9 +79,23 @@ def test_markdown_export_links_citations_and_lists_sources():
             "title": "Test report",
             "tldr": ["First takeaway"],
             "executive_summary": "It happened.",
-            "key_developments": [{"claim": "Claim A", "evidence": "Because.", "sources": ["s1"], "confidence": "high"}],
+            "key_developments": [
+                {
+                    "claim": "Claim A",
+                    "evidence": "Because.",
+                    "sources": ["s1"],
+                    "confidence": "high",
+                }
+            ],
             "timeline": [{"when": "2026-01", "what": "Released", "source_id": "s1"}],
-            "sources": [{"id": "s1", "title": "Primary post", "url": "https://example.com/post", "kind": "web"}],
+            "sources": [
+                {
+                    "id": "s1",
+                    "title": "Primary post",
+                    "url": "https://example.com/post",
+                    "kind": "web",
+                }
+            ],
             "open_questions": ["Will it last?"],
         },
         query="what happened?",
@@ -107,8 +125,17 @@ def test_field_name_drift_is_remapped_not_rejected():
             "takeaways": ["First", "Second"],
             "why_it_matters": "Because it is your stack.",
             "findings": [
-                {"headline": "A headline instead of a claim", "details": "Supporting detail", "citations": ["s4"]},
-                {"finding": "Another phrasing", "support": "More detail", "references": "s5", "certainty": "HIGH"},
+                {
+                    "headline": "A headline instead of a claim",
+                    "details": "Supporting detail",
+                    "citations": ["s4"],
+                },
+                {
+                    "finding": "Another phrasing",
+                    "support": "More detail",
+                    "references": "s5",
+                    "certainty": "HIGH",
+                },
             ],
             "next_steps": ["Watch the changelog"],
             "open_questions": ["Does it scale?"],

@@ -9,7 +9,7 @@ For production, swap the dict with Redis or a database backend.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from utils.config import settings
 
@@ -43,21 +43,23 @@ class SessionManager:
         """
         if session_id not in self._sessions:
             self._sessions[session_id] = []
-            logger.info(f"New session created: {session_id}")
+            logger.info("New session created: %s", session_id)
 
-        self._sessions[session_id].append({
-            "query": query,
-            "response": response,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        self._sessions[session_id].append(
+            {
+                "query": query,
+                "response": response,
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
+        )
 
         # Trim old turns if over the limit
         if len(self._sessions[session_id]) > self._max_turns:
             trimmed = len(self._sessions[session_id]) - self._max_turns
-            self._sessions[session_id] = self._sessions[session_id][-self._max_turns:]
-            logger.info(f"Session {session_id}: trimmed {trimmed} old turns")
+            self._sessions[session_id] = self._sessions[session_id][-self._max_turns :]
+            logger.info("Session %s: trimmed %s old turns", session_id, trimmed)
 
-        logger.info(f"Session {session_id}: {len(self._sessions[session_id])} turns stored")
+        logger.info("Session %s: %s turns stored", session_id, len(self._sessions[session_id]))
 
     def get_context(self, session_id: str, max_turns: int = 5) -> str:
         """
@@ -80,9 +82,7 @@ class SessionManager:
 
         for i, turn in enumerate(recent, 1):
             context_parts.append(
-                f"\nTurn {i}:\n"
-                f"  User: {turn['query']}\n"
-                f"  Assistant: {turn['response'][:300]}"
+                f"\nTurn {i}:\n  User: {turn['query']}\n  Assistant: {turn['response'][:300]}"
             )
 
         return "\n".join(context_parts)
@@ -95,7 +95,7 @@ class SessionManager:
         """Clear history for a specific session."""
         if session_id in self._sessions:
             del self._sessions[session_id]
-            logger.info(f"Session cleared: {session_id}")
+            logger.info("Session cleared: %s", session_id)
 
 
 # Global singleton instance

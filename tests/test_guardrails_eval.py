@@ -13,7 +13,12 @@ def result():
 
 
 def test_confusion_matrix_counts_match_corpus(result):
-    total = result.confusion["tp"] + result.confusion["fn"] + result.confusion["tn"] + result.confusion["fp"]
+    total = (
+        result.confusion["tp"]
+        + result.confusion["fn"]
+        + result.confusion["tn"]
+        + result.confusion["fp"]
+    )
     assert total == 22  # 12 attacks + 10 benign in the corpus
     # Every corpus attack is caught today (Phase 2 fixtures guarantee this)
     assert result.confusion["tp"] == 12

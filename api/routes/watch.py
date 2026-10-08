@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query
@@ -137,7 +137,7 @@ def _to_item(row: dict[str, Any]) -> ItemOut:
 
 def _since_from(window: str) -> str | None:
     """Translate a window keyword into an ISO timestamp."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     windows = {
         "today": now - timedelta(days=1),
         "week": now - timedelta(days=7),
@@ -276,9 +276,7 @@ async def get_profile():
 @router.put("/profile", response_model=ProfileModel)
 async def put_profile(body: ProfileModel):
     """Update the interest profile; new items are re-scored on the next run."""
-    p = await asyncio.to_thread(
-        save_profile, body.model_dump(exclude={"version"})
-    )
+    p = await asyncio.to_thread(save_profile, body.model_dump(exclude={"version"}))
     return ProfileModel(
         name=p.name,
         interests=p.interests,
@@ -296,6 +294,7 @@ async def put_profile(body: ProfileModel):
 
 def _run_refresh(job_id: str, body: RefreshRequest) -> None:
     """Background worker: ingest new items, then score unscored ones."""
+
     def progress(stage: str, detail: dict) -> None:
         job = db.get_job(job_id) or {}
         merged = {**(job.get("progress") or {}), stage: detail, "stage": stage}

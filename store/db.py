@@ -13,7 +13,7 @@ import sqlite3
 import uuid
 from collections.abc import Iterable
 from contextlib import closing
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -110,7 +110,7 @@ CREATE TABLE IF NOT EXISTS meta (
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def resolve_path(path: str | None = None) -> str:
@@ -456,7 +456,9 @@ def get_job(job_id: str, path: str | None = None) -> dict[str, Any] | None:
     return d
 
 
-def list_jobs(*, kind: str | None = None, limit: int = 30, path: str | None = None) -> list[dict[str, Any]]:
+def list_jobs(
+    *, kind: str | None = None, limit: int = 30, path: str | None = None
+) -> list[dict[str, Any]]:
     """Job history, newest first — includes scheduler cycles."""
     clauses, params = [], []
     if kind:
@@ -500,7 +502,9 @@ def stats(path: str | None = None) -> dict[str, Any]:
         total = con.execute("SELECT COUNT(*) AS c FROM items").fetchone()["c"]
         by_source = {
             r["source"]: r["c"]
-            for r in con.execute("SELECT source, COUNT(*) AS c FROM items GROUP BY source").fetchall()
+            for r in con.execute(
+                "SELECT source, COUNT(*) AS c FROM items GROUP BY source"
+            ).fetchall()
         }
         scored = con.execute("SELECT COUNT(DISTINCT item_id) AS c FROM scores").fetchone()["c"]
         bookmarks = con.execute("SELECT COUNT(*) AS c FROM bookmarks").fetchone()["c"]
@@ -661,8 +665,5 @@ def list_digests(*, limit: int = 50, path: str | None = None) -> list[dict[str, 
 def last_digest(path: str | None = None) -> dict[str, Any] | None:
     """The most recent digest — the baseline for delta computation."""
     with closing(connect(path)) as con:
-        row = con.execute(
-            "SELECT * FROM digests ORDER BY created_at DESC LIMIT 1"
-        ).fetchone()
+        row = con.execute("SELECT * FROM digests ORDER BY created_at DESC LIMIT 1").fetchone()
     return _decode_digest(row) if row else None
-

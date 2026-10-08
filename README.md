@@ -451,6 +451,21 @@ With Gmail, use a 16-character [App Password](https://myaccount.google.com/apppa
 not your login password. Port 587 upgrades with STARTTLS, 465 uses implicit SSL, and a
 failed send never blocks the digest.
 
+## Development
+
+```bash
+./venv/bin/ruff check .          # lint      (config: ruff.toml, pinned version)
+./venv/bin/ruff format --check . # formatting
+./venv/bin/pytest -q             # 246 tests, no network
+
+cd web && npm run typecheck && npm run lint && npm run build
+```
+
+The suite is offline by construction: adapters run against recorded fixtures, and
+every test clears API keys, so a developer's real credentials can never turn a test
+into a live call. [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs exactly
+these commands on every push and pull request.
+
 ## API surface
 
 <details>
@@ -485,7 +500,8 @@ sources/     feed adapters (HN, arXiv, RSS, Reddit, GitHub, Product Hunt) + shar
 store/       SQLite persistence: items, scores, topics, briefs, digests, jobs, bookmarks
 watch/       interest profile, ranker + score cache, dedup/clustering, digest, scheduler
 rag/         hybrid retriever (BM25 + dense + RRF + rerank) + optional LightRAG adapter
-agents/      LangGraph pipeline: planner, researcher, writer, verifier, reviser + jobs
+agents/      LangGraph pipeline: planner, researcher, writer, verifier, plus the job
+             runner, event bus and the shared state schema every stage reads
 utils/       config, LLM tiers + JSON calls, System 1 routing, tracing, cost meter
 guardrails/  injection scanner, PII/secret scrubber, output policy, run trace
 evals/       guardrail gate + LLM-as-judge report suite + CLI runner
@@ -494,7 +510,7 @@ mcp_server/  stdio MCP server: 7 tools over the store and job runner
 api/         FastAPI routes: /watch, /research (+SSE), /digests, /search, /health
 web/         Next.js 16 frontend (App Router, Tailwind v4)
 tests/       offline fixture-based test suite (246 tests)
-docs/        design specs for each phase
+docs/        design specs and implementation plans, indexed in docs/README.md
 ```
 
 ## Status
@@ -502,6 +518,8 @@ docs/        design specs for each phase
 Actively developed. Roadmap: trends/momentum view, command palette, audio briefings,
 multi-user accounts.
 
-Every phase has a written design spec in `docs/superpowers/specs/`, and each one landed
-with its tests: source intake, personalization, the report engine, streaming jobs,
-digests, guardrails, evals, tracing, System 1 routing, memory, GraphRAG and the MCP server.
+Every capability landed with its tests, and the later phases — guardrails, System 1
+routing, the eval harness, memory, GraphRAG and the MCP server — have design specs in
+[`docs/specs/`](docs/specs) written before the code. [`docs/README.md`](docs/README.md)
+indexes them.
+

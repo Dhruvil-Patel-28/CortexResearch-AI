@@ -14,7 +14,7 @@ and the exporters can all import it without cycles.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
@@ -27,7 +27,7 @@ SourceKind = Literal["web", "paper", "forum", "repo", "rss", "knowledge_base", "
 
 
 def _utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _as_str_list(value: Any) -> list[str]:
@@ -59,14 +59,25 @@ def _as_str(value: Any) -> str:
     if isinstance(value, list):
         return "\n\n".join(_as_str_list(value))
     if isinstance(value, dict):
-        return "\n\n".join(f"**{k.replace('_', ' ').title()}**: {_as_str(v)}" for k, v in value.items())
+        return "\n\n".join(
+            f"**{k.replace('_', ' ').title()}**: {_as_str(v)}" for k, v in value.items()
+        )
     return str(value).strip()
 
 
 # Models rarely stick to the exact field names we ask for. Rather than failing
 # validation (and losing a whole report), the first present alias wins.
 CLAIM_ALIASES = ("claim", "headline", "finding", "statement", "development", "title", "point")
-EVIDENCE_ALIASES = ("evidence", "detail", "details", "explanation", "supporting_evidence", "support", "body", "context")
+EVIDENCE_ALIASES = (
+    "evidence",
+    "detail",
+    "details",
+    "explanation",
+    "supporting_evidence",
+    "support",
+    "body",
+    "context",
+)
 SOURCE_ALIASES = ("sources", "citations", "source_ids", "source_id", "refs", "references")
 CONFIDENCE_ALIASES = ("confidence", "certainty", "confidence_level")
 
@@ -75,12 +86,28 @@ REPORT_ALIASES: dict[str, tuple[str, ...]] = {
     "tldr": ("tldr", "tl_dr", "takeaways", "key_takeaways", "highlights"),
     "background_primer": ("background_primer", "background", "primer", "introduction"),
     "key_developments": ("key_developments", "developments", "findings", "key_findings"),
-    "technical_explainer": ("technical_explainer", "how_it_works", "technical_details", "technical_breakdown"),
+    "technical_explainer": (
+        "technical_explainer",
+        "how_it_works",
+        "technical_details",
+        "technical_breakdown",
+    ),
     "implications": ("implications", "why_it_matters", "so_what", "significance", "impact"),
     "risks_and_uncertainty": (
-        "risks_and_uncertainty", "risks", "uncertainty", "uncertainties", "caveats", "limitations",
+        "risks_and_uncertainty",
+        "risks",
+        "uncertainty",
+        "uncertainties",
+        "caveats",
+        "limitations",
     ),
-    "what_to_watch_next": ("what_to_watch_next", "next_steps", "whats_next", "watch_next", "signals_to_watch"),
+    "what_to_watch_next": (
+        "what_to_watch_next",
+        "next_steps",
+        "whats_next",
+        "watch_next",
+        "signals_to_watch",
+    ),
     "open_questions": ("open_questions", "unanswered_questions", "open_issues"),
     "faq": ("faq", "faqs", "questions_and_answers"),
     "glossary": ("glossary", "terms", "jargon", "key_terms"),
@@ -89,8 +116,15 @@ REPORT_ALIASES: dict[str, tuple[str, ...]] = {
 }
 
 _SCALAR_FIELDS = (
-    "title", "tldr", "executive_summary", "background_primer", "technical_explainer",
-    "implications", "risks_and_uncertainty", "what_to_watch_next", "open_questions",
+    "title",
+    "tldr",
+    "executive_summary",
+    "background_primer",
+    "technical_explainer",
+    "implications",
+    "risks_and_uncertainty",
+    "what_to_watch_next",
+    "open_questions",
 )
 
 
@@ -184,7 +218,9 @@ class KeyDevelopment(BaseModel):
         _remap(data, EVIDENCE_ALIASES, "evidence")
         _remap(data, SOURCE_ALIASES, "sources")
         _remap(data, CONFIDENCE_ALIASES, "confidence")
-        return {k: v for k, v in data.items() if k in {"claim", "evidence", "sources", "confidence"}}
+        return {
+            k: v for k, v in data.items() if k in {"claim", "evidence", "sources", "confidence"}
+        }
 
     @field_validator("claim", "evidence", mode="before")
     @classmethod
@@ -350,8 +386,16 @@ class ResearchReportV2(BaseModel):
     cost_usd: float = 0.0
     created_at: str = Field(default_factory=_utc_now)
 
-    @field_validator("title", "query", "executive_summary", "background_primer", "technical_explainer",
-                     "implications", "risks_and_uncertainty", mode="before")
+    @field_validator(
+        "title",
+        "query",
+        "executive_summary",
+        "background_primer",
+        "technical_explainer",
+        "implications",
+        "risks_and_uncertainty",
+        mode="before",
+    )
     @classmethod
     def _clean_text(cls, v: Any) -> str:
         return _as_str(v)
@@ -428,7 +472,9 @@ def _salvage(data: dict[str, Any]) -> ResearchReportV2:
     """
     scalars = {k: data[k] for k in _SCALAR_FIELDS if k in data}
     report = ResearchReportV2.model_validate(scalars)
-    report.key_developments = [d for d in _safe_list(data.get("key_developments"), KeyDevelopment) if d.claim.strip()]
+    report.key_developments = [
+        d for d in _safe_list(data.get("key_developments"), KeyDevelopment) if d.claim.strip()
+    ]
     report.timeline = _safe_list(data.get("timeline"), TimelineEntry)
     report.faq = _safe_list(data.get("faq"), FAQItem)
     report.glossary = _safe_list(data.get("glossary"), GlossaryTerm)

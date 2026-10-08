@@ -1,0 +1,45 @@
+# Build context for every service in docker-compose (all three build from the
+# repo root). Keeps the context small and, more importantly, keeps secrets out:
+# without this file `COPY . .` would bake .env — and a local venv/ and data/ —
+# into the image layer.
+
+# --- Secrets and local configuration ---
+.env
+.env.*
+!.env.example
+
+# --- Virtualenvs and caches ---
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+
+# --- Local runtime state (databases, digests, exports) ---
+data/
+local/
+
+# --- Git and CI metadata ---
+.git/
+.gitignore
+.github/
+
+# --- Agent tooling / planning scratch ---
+.agents/
+.superpowers/
+.verdent/
+skills-lock.json
+web/AGENTS.md
+web/CLAUDE.md
+
+# --- Frontend: installed and built by web.Dockerfile itself ---
+web/node_modules/
+web/.next/
+web/out/
+web/npm-debug.log*
+
+# --- Docs are not needed at runtime (tests/fixtures/ stays: evals read it) ---
+docs/
+README.md

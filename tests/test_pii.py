@@ -14,7 +14,7 @@ def test_email_redacted_shape_preserving():
     clean, redactions = scrub(text)
     assert "jane.doe@example.com" not in clean
     assert "[EMAIL]" in clean
-    assert "Contact [EMAIL] for details." == clean
+    assert clean == "Contact [EMAIL] for details."
     assert _kinds(redactions) == {"email": 1}
 
 

@@ -1,0 +1,56 @@
+# Ruff — the single source of truth for Python linting *and* formatting.
+#
+# CI installs the version pinned in requirements.txt, so `ruff check .` and
+# `ruff format --check .` give the same answer on a laptop and in CI. Before
+# this file existed, linting depended on whatever ruff version was installed.
+
+target-version = "py312"
+line-length = 100
+
+exclude = [
+    ".agents",      # vendored agent skill, not project source
+    ".git",
+    ".ruff_cache",
+    ".superpowers", # local planning scratch
+    ".verdent",     # local agent state
+    "data",
+    "local",        # self-hosted infrastructure (Langfuse), never committed
+    "venv",
+    "web",          # TypeScript — eslint and tsc own that side
+]
+
+[lint]
+select = [
+    "A",     # shadowed builtins
+    "B",     # flake8-bugbear
+    "BLE",   # blind except — every catch-all here is deliberate and noqa'd
+    "C4",    # comprehension idioms
+    "DTZ",   # naive datetimes
+    "E4", "E7", "E9",
+    "F",     # pyflakes
+    "G",     # logging format (lazy %s, not f-strings)
+    "I",     # import order
+    "ISC",   # implicit string concatenation
+    "LOG",   # logging misuse
+    "N",     # naming
+    "PTH",   # pathlib over os.path
+    "PYI",   # stub-style annotations
+    "RET",   # return idioms
+    "RUF",
+    "SIM",   # simplifications
+    "T20",   # stray prints outside CLI entrypoints
+    "UP",    # pyupgrade
+    "W",
+]
+
+# E501 is deliberately absent: the formatter owns line width, and the long
+# lines that remain are unwrappable string literals (HTML templates, prompts).
+#
+# Typographic dashes are intentional — prose uses them, and watch/dedupe.py
+# matches them inside the separator class that normalises titles.
+allowed-confusables = ["–", "—"]
+
+[lint.per-file-ignores]
+# Command-line entrypoints are supposed to print.
+"evals/runner.py" = ["T201"]
+"watch/run.py" = ["T201"]

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sources.base import FeedItem, SourceAdapter, http_get
 from utils.config import settings
@@ -30,7 +30,7 @@ def parse_hn_item(raw: dict, min_score: int = 0) -> FeedItem | None:
     hn_url = f"https://news.ycombinator.com/item?id={raw.get('id')}"
     published = ""
     if raw.get("time"):
-        published = datetime.fromtimestamp(int(raw["time"]), tz=timezone.utc).isoformat()
+        published = datetime.fromtimestamp(int(raw["time"]), tz=UTC).isoformat()
 
     return FeedItem(
         source="hackernews",
@@ -55,7 +55,7 @@ class HackerNewsAdapter(SourceAdapter):
         try:
             ids = http_get(f"{API}/topstories.json").json()
         except Exception as e:  # noqa: BLE001 — never break the ingest run
-            logger.warning(f"HN topstories failed: {e}")
+            logger.warning("HN topstories failed: %s", e)
             return []
 
         if not isinstance(ids, list):
@@ -73,7 +73,7 @@ class HackerNewsAdapter(SourceAdapter):
 
         # Keep the most-discussed stories first
         items.sort(key=lambda i: i.metrics.get("score", 0), reverse=True)
-        logger.info(f"HN: kept {len(items)} stories above {settings.hn_min_score} points")
+        logger.info("HN: kept %s stories above %s points", len(items), settings.hn_min_score)
         return items[:limit]
 
     def _detail(self, story_id: int) -> FeedItem | None:

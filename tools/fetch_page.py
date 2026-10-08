@@ -21,7 +21,19 @@ USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/124.0 Safari/537.36 CortexResearch/2.0"
 )
-_STRIP_TAGS = ("script", "style", "noscript", "svg", "nav", "footer", "header", "aside", "form", "iframe", "figure")
+_STRIP_TAGS = (
+    "script",
+    "style",
+    "noscript",
+    "svg",
+    "nav",
+    "footer",
+    "header",
+    "aside",
+    "form",
+    "iframe",
+    "figure",
+)
 _WS_RE = re.compile(r"[ \t\r\f\v]+")
 _BLANKS_RE = re.compile(r"\n{3,}")
 
@@ -107,7 +119,10 @@ def fetch_many(urls: list[str], *, timeout: float = 10.0, max_chars: int = 7000)
 
     out: dict[str, str] = {}
     with ThreadPoolExecutor(max_workers=5) as executor:
-        futures = {executor.submit(fetch_page_text, url, timeout=timeout, max_chars=max_chars): url for url in unique}
+        futures = {
+            executor.submit(fetch_page_text, url, timeout=timeout, max_chars=max_chars): url
+            for url in unique
+        }
         for future, url in futures.items():
             try:
                 out[url] = future.result(timeout=timeout + 5)

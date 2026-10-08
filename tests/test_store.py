@@ -112,7 +112,7 @@ def test_cluster_collapse_merges_cross_source_stories(db_path):
         make_item(external_id="b", title="Story A from RSS", source="rss"),
         make_item(external_id="c", title="Unrelated story", source="arxiv"),
     ]
-    for it, key in zip(items, ["cluster1", "cluster1", "cluster2"]):
+    for it, key in zip(items, ["cluster1", "cluster1", "cluster2"], strict=True):
         it.cluster_key = key
     db.upsert_items(items, path=db_path)
 
@@ -131,7 +131,9 @@ def test_cluster_collapse_merges_cross_source_stories(db_path):
 
 
 def test_stats(db_path):
-    db.upsert_items([make_item(external_id="1"), make_item(external_id="2", source="arxiv")], path=db_path)
+    db.upsert_items(
+        [make_item(external_id="1"), make_item(external_id="2", source="arxiv")], path=db_path
+    )
     s = db.stats(path=db_path)
     assert s["total_items"] == 2
     assert s["by_source"] == {"hn": 1, "arxiv": 1}

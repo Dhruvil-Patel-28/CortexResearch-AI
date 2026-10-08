@@ -6,7 +6,7 @@ Provides endpoints for research queries, health checks, and session management.
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -47,6 +47,7 @@ async def lifespan(app: FastAPI):
 
     # Pre-load expensive resources at startup (not on first request)
     import asyncio
+
     try:
         logger.info("Warming up: loading embedding model + FAISS index...")
         await asyncio.to_thread(_warmup_resources)
@@ -129,7 +130,9 @@ async def research(request: ResearchRequest):
     if not request.query.strip():
         raise HTTPException(status_code=400, detail="Query cannot be empty.")
 
-    logger.info(f"Research request received: '{request.query[:100]}' | session={request.session_id}")
+    logger.info(
+        "Research request received: '%s' | session=%s", request.query[:100], request.session_id
+    )
 
     try:
         # Run the blocking agent pipeline in a thread pool (async)
@@ -174,12 +177,14 @@ async def research(request: ResearchRequest):
                 )
                 for s in result.get("agent_steps", [])
             ],
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
 
         logger.info(
-            f"Research completed | session={result['session_id']} | "
-            f"citations={len(response.citations)} | cost=${result.get('cost_usd', 0):.4f}"
+            "Research completed | session=%s | citations=%s | cost=$%.4f",
+            result["session_id"],
+            len(response.citations),
+            result.get("cost_usd", 0),
         )
         return response
 
@@ -188,7 +193,7 @@ async def research(request: ResearchRequest):
         raise HTTPException(
             status_code=500,
             detail=f"Research pipeline failed: {e!s}",
-        )
+        ) from e
 
 
 @app.get("/sessions/{session_id}/history", response_model=SessionHistoryResponse)

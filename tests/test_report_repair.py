@@ -90,14 +90,18 @@ def test_patch_draft_applies_rewrite_and_remove(monkeypatch):
     from agents.writer import ClaimPatch, PatchList, _patch_draft
 
     def fake_call_json(llm, **kwargs):
-        return PatchList(revisions=[
-            ClaimPatch(index=0, action="rewrite", claim="Claim A, hedged.", evidence="still e"),
-            ClaimPatch(index=1, action="remove"),
-        ])
+        return PatchList(
+            revisions=[
+                ClaimPatch(index=0, action="rewrite", claim="Claim A, hedged.", evidence="still e"),
+                ClaimPatch(index=1, action="remove"),
+            ]
+        )
 
     monkeypatch.setattr(writer_mod, "call_json", fake_call_json)
     state = _draft_state()
-    patched = _patch_draft(state, state["report_draft"], state["verification"]["unsupported_claims"])
+    patched = _patch_draft(
+        state, state["report_draft"], state["verification"]["unsupported_claims"]
+    )
 
     assert patched is not None
     assert len(patched["key_developments"]) == 1
@@ -107,14 +111,17 @@ def test_patch_draft_applies_rewrite_and_remove(monkeypatch):
 def test_patch_draft_returns_none_when_call_fails(monkeypatch):
     from agents import writer as writer_mod
     from agents.writer import _patch_draft
-    from utils.llm_json import JsonCallError as _JCE
+    from utils.llm_json import JsonCallError as _JsonCallError
 
     def boom(*args, **kwargs):
-        raise _JCE("no parse")
+        raise _JsonCallError("no parse")
 
     monkeypatch.setattr(writer_mod, "call_json", boom)
     state = _draft_state()
-    assert _patch_draft(state, state["report_draft"], state["verification"]["unsupported_claims"]) is None
+    assert (
+        _patch_draft(state, state["report_draft"], state["verification"]["unsupported_claims"])
+        is None
+    )
 
 
 def test_reviser_keeps_draft_when_patching_unavailable(monkeypatch):
@@ -137,6 +144,12 @@ def test_reviser_clean_pass_through(monkeypatch):
     from agents.writer import reviser_node
 
     state = _draft_state()
-    state["verification"] = {"checked": 2, "supported": 2, "unsupported": 0, "unsupported_claims": [], "notes": ""}
+    state["verification"] = {
+        "checked": 2,
+        "supported": 2,
+        "unsupported": 0,
+        "unsupported_claims": [],
+        "notes": "",
+    }
     result = reviser_node(state)
     assert result["report"]["key_developments"][0]["claim"] == "Claim A is supported."

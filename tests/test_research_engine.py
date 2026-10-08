@@ -48,14 +48,33 @@ PLAN_JSON = {
     "title": "GPU supply in 2026",
     "scope": "Availability and pricing of consumer GPUs.",
     "sub_questions": [
-        {"question": "What changed in GPU supply?", "why": "baseline", "search_queries": ["gpu supply", "gpu prices"]},
+        {
+            "question": "What changed in GPU supply?",
+            "why": "baseline",
+            "search_queries": ["gpu supply", "gpu prices"],
+        },
         {"question": "Who is affected?", "why": "impact", "search_queries": ["gpu buyers"]},
     ],
 }
 
-DEVELOPMENT_OK = {"claim": "Supply improved in Q1", "evidence": "Two sources report higher volume.", "sources": ["s1"], "confidence": "high"}
-DEVELOPMENT_OK2 = {"claim": "Prices fell 12%", "evidence": "Reported by two outlets.", "sources": ["s1", "s2"], "confidence": "medium"}
-DEVELOPMENT_BAD = {"claim": "A completely uncited claim", "evidence": "Nowhere.", "sources": ["s99"], "confidence": "low"}
+DEVELOPMENT_OK = {
+    "claim": "Supply improved in Q1",
+    "evidence": "Two sources report higher volume.",
+    "sources": ["s1"],
+    "confidence": "high",
+}
+DEVELOPMENT_OK2 = {
+    "claim": "Prices fell 12%",
+    "evidence": "Reported by two outlets.",
+    "sources": ["s1", "s2"],
+    "confidence": "medium",
+}
+DEVELOPMENT_BAD = {
+    "claim": "A completely uncited claim",
+    "evidence": "Nowhere.",
+    "sources": ["s99"],
+    "confidence": "low",
+}
 
 
 def _report_payload(developments):
@@ -91,8 +110,17 @@ def _install_fakes(monkeypatch, *, developments, verdicts=None, total=2):
         if "Verifier of an autonomous" in system:
             if verdicts is not None:
                 return json.dumps(verdicts)
-            ids = [line.split("\n")[0].strip() for line in user.split("\n\n") if line.startswith("c")]
-            return json.dumps({"verdicts": [{"id": cid, "supported": True, "reason": "matches"} for cid in ids], "notes": "solid"})
+            ids = [
+                line.split("\n")[0].strip() for line in user.split("\n\n") if line.startswith("c")
+            ]
+            return json.dumps(
+                {
+                    "verdicts": [
+                        {"id": cid, "supported": True, "reason": "matches"} for cid in ids
+                    ],
+                    "notes": "solid",
+                }
+            )
         if "Reviser of an autonomous" in system:
             # The patch pass removes the flagged (uncited) claim in place.
             writer_outputs.append("revision")
@@ -109,22 +137,40 @@ def _install_fakes(monkeypatch, *, developments, verdicts=None, total=2):
 
     def fake_web(query, max_results=5):
         return [
-            {"title": f"{query} — result {i}", "url": f"https://news.example.com/{query.replace(' ', '-')}-{i}",
-             "snippet": f"snippet {i} for {query}", "source": "news.example.com"}
+            {
+                "title": f"{query} — result {i}",
+                "url": f"https://news.example.com/{query.replace(' ', '-')}-{i}",
+                "snippet": f"snippet {i} for {query}",
+                "source": "news.example.com",
+            }
             for i in range(1, total + 1)
         ]
 
     def fake_store(query, limit=6):
         return [
-            {"id": "i1", "title": f"Radar item about {query}", "url": "https://news.ycombinator.com/item?id=1",
-             "source": "hackernews", "published_at": "2026-01-02T00:00:00Z", "snippet": "radar text", "relevance": 8.5}
+            {
+                "id": "i1",
+                "title": f"Radar item about {query}",
+                "url": "https://news.ycombinator.com/item?id=1",
+                "source": "hackernews",
+                "published_at": "2026-01-02T00:00:00Z",
+                "snippet": "radar text",
+                "relevance": 8.5,
+            }
         ]
 
     def fake_rag(query, k=None):
-        return [{"title": "internal-notes.pdf (p. 3)", "url": "", "snippet": "internal context", "score": 0.72}]
+        return [
+            {
+                "title": "internal-notes.pdf (p. 3)",
+                "url": "",
+                "snippet": "internal context",
+                "score": 0.72,
+            }
+        ]
 
     def fake_fetch(urls, **kwargs):
-        return {url: ("Full article body about the topic. " * 40) for url in urls}
+        return dict.fromkeys(urls, "Full article body about the topic. " * 40)
 
     monkeypatch.setattr(researcher_mod, "web_search_results", fake_web)
     monkeypatch.setattr(researcher_mod, "store_results", fake_store)
@@ -138,8 +184,15 @@ def _install_fakes(monkeypatch, *, developments, verdicts=None, total=2):
 
 def test_registry_dedupes_by_canonical_url_and_keeps_richest_snippet():
     registry = SourceRegistry()
-    first = registry.add(kind="web", title="Post", url="https://www.example.com/a/", snippet="short")
-    second = registry.add(kind="rss", title="Post (syndicated)", url="http://example.com/a?utm_source=x", snippet="a much longer snippet")
+    first = registry.add(
+        kind="web", title="Post", url="https://www.example.com/a/", snippet="short"
+    )
+    second = registry.add(
+        kind="rss",
+        title="Post (syndicated)",
+        url="http://example.com/a?utm_source=x",
+        snippet="a much longer snippet",
+    )
 
     assert first == "s1"
     assert second == "s1"
@@ -159,7 +212,9 @@ def test_registry_respects_limit_and_renders_evidence_block():
 
 
 def test_canonical_url_strips_scheme_www_and_trailing_slash():
-    assert canonical_url("https://www.Example.com/Post/") == canonical_url("http://example.com/Post")
+    assert canonical_url("https://www.Example.com/Post/") == canonical_url(
+        "http://example.com/Post"
+    )
 
 
 # ─── Utility behaviour ───
@@ -188,9 +243,13 @@ def test_store_query_tokens_drop_stopwords():
 
 
 def test_extract_main_text_prefers_article_body():
-    html = """<html><head><style>.x{color:red}</style><script>var a=1;</script></head>
+    html = (
+        """<html><head><style>.x{color:red}</style><script>var a=1;</script></head>
     <body><nav>Menu Home About</nav><article><h1>Title</h1>
-    <p>""" + ("Real body sentence. " * 60) + """</p></article><footer>Copyright 2026</footer></body></html>"""
+    <p>"""
+        + ("Real body sentence. " * 60)
+        + """</p></article><footer>Copyright 2026</footer></body></html>"""
+    )
 
     text = extract_main_text(html)
     assert "Real body sentence." in text
@@ -207,7 +266,9 @@ def test_pipeline_produces_a_schema_valid_report_with_verified_citations(monkeyp
         developments=[DEVELOPMENT_OK, DEVELOPMENT_OK2, DEVELOPMENT_BAD],
     )
     events: list[dict] = []
-    result = run_research("What is happening with GPU supply?", depth="standard", emit=lambda t, p: events.append(p))
+    result = run_research(
+        "What is happening with GPU supply?", depth="standard", emit=lambda t, p: events.append(p)
+    )
     report = ResearchReportV2.model_validate(result["report"])
 
     # Schema contract
@@ -249,7 +310,13 @@ def test_clean_verification_skips_the_revision_pass(monkeypatch):
     assert writer_outputs == ["draft"], "a clean report must not trigger a second writer call"
     assert result["verification"]["unsupported"] == 0
     assert result["verification"]["supported"] == 2
-    assert [s["agent_name"] for s in result["agent_steps"]] == ["Planner", "Researcher", "Writer", "Verifier", "Reviser"]
+    assert [s["agent_name"] for s in result["agent_steps"]] == [
+        "Planner",
+        "Researcher",
+        "Writer",
+        "Verifier",
+        "Reviser",
+    ]
     assert result["report"]["title"] == "GPU supply in 2026"
 
 
@@ -271,7 +338,11 @@ def test_verifier_flags_uncited_claims_without_calling_the_model(monkeypatch):
 
 def test_pipeline_survives_a_writer_that_returns_prose(monkeypatch):
     _, _ = _install_fakes(monkeypatch, developments=[DEVELOPMENT_OK])
-    monkeypatch.setattr(writer_mod, "invoke_llm", lambda llm, msgs, meter=None, label="": AIMessage(content="I could not comply."))
+    monkeypatch.setattr(
+        writer_mod,
+        "invoke_llm",
+        lambda llm, msgs, meter=None, label="": AIMessage(content="I could not comply."),
+    )
 
     # A writer that cannot produce content must fail the run loudly — the
     # result carries the error and a report explicitly marked as failed,

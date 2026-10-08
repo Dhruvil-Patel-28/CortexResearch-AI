@@ -55,7 +55,10 @@ def _fake_retriever(monkeypatch):
             )
         return hits[:k]
 
-    monkeypatch.setattr("rag.retriever.get_retriever", lambda: type("R", (), {"search": staticmethod(fake_search)})())
+    monkeypatch.setattr(
+        "rag.retriever.get_retriever",
+        lambda: type("R", (), {"search": staticmethod(fake_search)})(),
+    )
 
 
 def test_search_contract_flags_off(client, monkeypatch):
@@ -74,15 +77,17 @@ def test_search_contract_flags_off(client, monkeypatch):
 def test_search_kind_filter_and_relevance(client, monkeypatch):
     _fake_retriever(monkeypatch)
     store.save_scores(
-        [{
-            "item_id": "item-1",
-            "relevance": 7.5,
-            "rationale": "test",
-            "tags": [],
-            "model": "test",
-            "profile_version": "test",
-            "scored_at": "2026-10-07T00:00:00+00:00",
-        }]
+        [
+            {
+                "item_id": "item-1",
+                "relevance": 7.5,
+                "rationale": "test",
+                "tags": [],
+                "model": "test",
+                "profile_version": "test",
+                "scored_at": "2026-10-07T00:00:00+00:00",
+            }
+        ]
     )
 
     only_items = client.get("/search", params={"q": "x", "kind": "item"}).json()

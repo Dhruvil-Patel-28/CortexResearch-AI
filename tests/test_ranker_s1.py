@@ -14,7 +14,14 @@ class StubRouter(S1S2Router):
     """Router whose decide() returns canned decisions and counts calls."""
 
     def __init__(self, score: float, confidence: float = 0.9) -> None:
-        super().__init__(backend=None, fallback=None, escalate=None, threshold=0.75, log=DecisionLog(), breaker=CircuitBreaker())
+        super().__init__(
+            backend=None,
+            fallback=None,
+            escalate=None,
+            threshold=0.75,
+            log=DecisionLog(),
+            breaker=CircuitBreaker(),
+        )
         self.score = score
         self.confidence = confidence
         self.calls = 0
@@ -37,16 +44,36 @@ def seeded_db(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "db_path", str(tmp_path / "r.db"))
     monkeypatch.setattr(settings, "profile_path", str(tmp_path / "profile.yaml"))
     db.init_db()
-    db.upsert_items([
-        FeedItem(source="hackernews", title="Agent evals framework", url="https://x/1", external_id="1", raw_text="eval harness for agents"),
-        FeedItem(source="hackernews", title="Another item", url="https://x/2", external_id="2", raw_text="something else"),
-    ])
+    db.upsert_items(
+        [
+            FeedItem(
+                source="hackernews",
+                title="Agent evals framework",
+                url="https://x/1",
+                external_id="1",
+                raw_text="eval harness for agents",
+            ),
+            FeedItem(
+                source="hackernews",
+                title="Another item",
+                url="https://x/2",
+                external_id="2",
+                raw_text="something else",
+            ),
+        ]
+    )
     yield
 
 
 def _items() -> list[dict]:
     return [
-        {"id": db.list_items(limit=1, order="newest")[0]["id"], "source": "hackernews", "title": "Agent evals framework", "raw_text": "eval harness", "metrics": {}},
+        {
+            "id": db.list_items(limit=1, order="newest")[0]["id"],
+            "source": "hackernews",
+            "title": "Agent evals framework",
+            "raw_text": "eval harness",
+            "metrics": {},
+        },
     ]
 
 

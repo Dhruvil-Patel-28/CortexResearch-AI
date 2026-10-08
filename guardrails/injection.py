@@ -29,41 +29,118 @@ _ZERO_WIDTH_RE = re.compile(r"[\u200b\u200c\u200d\u2060\ufeff]")
 # (category, pattern, weight). Strong markers need no directive context.
 _STRONG_PATTERNS: list[tuple[str, re.Pattern[str], float]] = [
     ("fake_authority", re.compile(r"\bSYSTEM\s*:", re.IGNORECASE), 0.85),
-    ("fake_authority", re.compile(r"<\|im_start\|>|<\|im_end\|>|\[INST\]|###\s*Assistant", re.IGNORECASE), 0.85),
-    ("fake_authority", re.compile(r"\[\s*NOTE\s+FROM\s+YOUR\s+(?:DEVELOPERS?|CREATORS?|ADMIN)\s*\]", re.IGNORECASE), 0.85),
-    ("fake_authority", re.compile(r"your\s+(?:developer|creator|admin)s?\s+(?:says?|said|instructed)", re.IGNORECASE), 0.75),
+    (
+        "fake_authority",
+        re.compile(r"<\|im_start\|>|<\|im_end\|>|\[INST\]|###\s*Assistant", re.IGNORECASE),
+        0.85,
+    ),
+    (
+        "fake_authority",
+        re.compile(
+            r"\[\s*NOTE\s+FROM\s+YOUR\s+(?:DEVELOPERS?|CREATORS?|ADMIN)\s*\]", re.IGNORECASE
+        ),
+        0.85,
+    ),
+    (
+        "fake_authority",
+        re.compile(
+            r"your\s+(?:developer|creator|admin)s?\s+(?:says?|said|instructed)", re.IGNORECASE
+        ),
+        0.75,
+    ),
 ]
 
 # Directive-context patterns: must also pass the quote / third-person guard.
 _DIRECTIVE_PATTERNS: list[tuple[str, re.Pattern[str], float]] = [
     # Instruction override
-    ("instruction_override", re.compile(
-        r"ignore\s+(?:all\s+|any\s+|the\s+|everything\s+|each\s+)?(?:previous\s+|prior\s+|earlier\s+|above\s+|given\s+|that\s+)?instructions?", re.IGNORECASE), 0.8),
-    ("instruction_override", re.compile(
-        r"ignore\s+(?:all\s+|any\s+|everything\s+|the\s+)?(?:that\s+was\s+)?(?:said\s+)?above", re.IGNORECASE), 0.8),
-    ("instruction_override", re.compile(
-        r"disregard\s+(?:all\s+|any\s+|the\s+|your\s+|previous\s+|prior\s+)?(?:instructions|system\s+prompt|guidelines)", re.IGNORECASE), 0.8),
-    ("instruction_override", re.compile(
-        r"you\s+are\s+now\s+(?:a|an|no\s+longer|unrestricted|free)", re.IGNORECASE), 0.8),
+    (
+        "instruction_override",
+        re.compile(
+            r"ignore\s+(?:all\s+|any\s+|the\s+|everything\s+|each\s+)?(?:previous\s+|prior\s+|earlier\s+|above\s+|given\s+|that\s+)?instructions?",
+            re.IGNORECASE,
+        ),
+        0.8,
+    ),
+    (
+        "instruction_override",
+        re.compile(
+            r"ignore\s+(?:all\s+|any\s+|everything\s+|the\s+)?(?:that\s+was\s+)?(?:said\s+)?above",
+            re.IGNORECASE,
+        ),
+        0.8,
+    ),
+    (
+        "instruction_override",
+        re.compile(
+            r"disregard\s+(?:all\s+|any\s+|the\s+|your\s+|previous\s+|prior\s+)?(?:instructions|system\s+prompt|guidelines)",
+            re.IGNORECASE,
+        ),
+        0.8,
+    ),
+    (
+        "instruction_override",
+        re.compile(r"you\s+are\s+now\s+(?:a|an|no\s+longer|unrestricted|free)", re.IGNORECASE),
+        0.8,
+    ),
     # Goal hijack
-    ("goal_hijack", re.compile(
-        r"\b(?:print|output|reveal|echo)\s+(?:your|the)\b[^.\n]{0,40}(?:system\s+prompt|instructions?|secrets?|configuration)", re.IGNORECASE), 0.8),
-    ("goal_hijack", re.compile(
-        r"respond\s+only\s+with\s+(?:your|the)\s+(?:hidden\s+|system\s+|new\s+)?(?:configuration|instructions|prompt)", re.IGNORECASE), 0.8),
+    (
+        "goal_hijack",
+        re.compile(
+            r"\b(?:print|output|reveal|echo)\s+(?:your|the)\b[^.\n]{0,40}(?:system\s+prompt|instructions?|secrets?|configuration)",
+            re.IGNORECASE,
+        ),
+        0.8,
+    ),
+    (
+        "goal_hijack",
+        re.compile(
+            r"respond\s+only\s+with\s+(?:your|the)\s+(?:hidden\s+|system\s+|new\s+)?(?:configuration|instructions|prompt)",
+            re.IGNORECASE,
+        ),
+        0.8,
+    ),
     # Exfiltration
-    ("exfiltration", re.compile(
-        r"\b(?:email|send|post|exfiltrate)\s+(?:me\s+|out\s+)?(?:your|the|all)\s+(?:system\s+prompt|api\s+keys?|secrets?|credentials?|conversation(?:\s+history)?|hidden\s+instructions?|configuration)", re.IGNORECASE), 0.85),
-    ("exfiltration", re.compile(
-        r"base64[- ]?(?:encode|encodes|encoded)\s+your", re.IGNORECASE), 0.8),
+    (
+        "exfiltration",
+        re.compile(
+            r"\b(?:email|send|post|exfiltrate)\s+(?:me\s+|out\s+)?(?:your|the|all)\s+(?:system\s+prompt|api\s+keys?|secrets?|credentials?|conversation(?:\s+history)?|hidden\s+instructions?|configuration)",
+            re.IGNORECASE,
+        ),
+        0.85,
+    ),
+    (
+        "exfiltration",
+        re.compile(r"base64[- ]?(?:encode|encodes|encoded)\s+your", re.IGNORECASE),
+        0.8,
+    ),
     # Source fabrication
-    ("source_fabrication", re.compile(
-        r"treat\s+(?:this|the|that)\s+(?:document|page|source|article|site)\s+as\s+(?:a\s+)?trusted", re.IGNORECASE), 0.8),
-    ("source_fabrication", re.compile(
-        r"mark\s+(?:all\s+|its\s+|these\s+|the\s+)?(?:claims?\s+)?as\s+verified", re.IGNORECASE), 0.75),
-    ("source_fabrication", re.compile(
-        r"skip(?:ping)?\s+(?:the\s+)?(?:citation|verification)\s+checks?", re.IGNORECASE), 0.75),
-    ("source_fabrication", re.compile(
-        r"cite\s+https?://\S+\s+as\s+(?:a\s+)?verified\s+source", re.IGNORECASE), 0.8),
+    (
+        "source_fabrication",
+        re.compile(
+            r"treat\s+(?:this|the|that)\s+(?:document|page|source|article|site)\s+as\s+(?:a\s+)?trusted",
+            re.IGNORECASE,
+        ),
+        0.8,
+    ),
+    (
+        "source_fabrication",
+        re.compile(
+            r"mark\s+(?:all\s+|its\s+|these\s+|the\s+)?(?:claims?\s+)?as\s+verified", re.IGNORECASE
+        ),
+        0.75,
+    ),
+    (
+        "source_fabrication",
+        re.compile(
+            r"skip(?:ping)?\s+(?:the\s+)?(?:citation|verification)\s+checks?", re.IGNORECASE
+        ),
+        0.75,
+    ),
+    (
+        "source_fabrication",
+        re.compile(r"cite\s+https?://\S+\s+as\s+(?:a\s+)?verified\s+source", re.IGNORECASE),
+        0.8,
+    ),
 ]
 
 # Preceding-window cues that mark a match as third-person discussion / quoted.
@@ -84,7 +161,7 @@ class InjectionReport(BaseModel):
 
 def _is_discussion_context(text: str, start: int) -> bool:
     """True when the match is inside quotes or follows a third-person cue."""
-    window = text[max(0, start - _CUE_WINDOW):start]
+    window = text[max(0, start - _CUE_WINDOW) : start]
     if _THIRD_PERSON_CUE_RE.search(window):
         return True
     line_start = text.rfind("\n", 0, start) + 1
@@ -96,23 +173,27 @@ def _find(text: str, findings: list[dict]) -> float:
     risk = 0.0
     for category, pattern, weight in _STRONG_PATTERNS:
         for m in pattern.finditer(text):
-            findings.append({
-                "category": category,
-                "excerpt": m.group(0)[:120],
-                "start": m.start(),
-                "weight": weight,
-            })
+            findings.append(
+                {
+                    "category": category,
+                    "excerpt": m.group(0)[:120],
+                    "start": m.start(),
+                    "weight": weight,
+                }
+            )
             risk += weight
     for category, pattern, weight in _DIRECTIVE_PATTERNS:
         for m in pattern.finditer(text):
             if _is_discussion_context(text, m.start()):
                 continue
-            findings.append({
-                "category": category,
-                "excerpt": m.group(0)[:120],
-                "start": m.start(),
-                "weight": weight,
-            })
+            findings.append(
+                {
+                    "category": category,
+                    "excerpt": m.group(0)[:120],
+                    "start": m.start(),
+                    "weight": weight,
+                }
+            )
             risk += weight
     return risk
 
@@ -132,12 +213,14 @@ def scan(text: str) -> InjectionReport:
         hidden_risk = _find(stripped, hidden)
         if hidden_risk > 0:
             risk += 0.25  # obfuscation is itself a signal
-            findings.append({
-                "category": "obfuscation",
-                "excerpt": "[zero-width unicode hiding directives]",
-                "start": None,
-                "weight": 0.25,
-            })
+            findings.append(
+                {
+                    "category": "obfuscation",
+                    "excerpt": "[zero-width unicode hiding directives]",
+                    "start": None,
+                    "weight": 0.25,
+                }
+            )
             for f in hidden:
                 f["start"] = None  # offsets refer to de-obfuscated text
                 findings.append({**f, "excerpt": f"[zero-width-obfuscated] {f['excerpt']}"})

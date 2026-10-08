@@ -137,7 +137,9 @@ class LLMClient:
 
 def _is_temperature_error(exc: Exception) -> bool:
     text = str(exc).lower()
-    return "temperature" in text and ("deprecated" in text or "unsupported" in text or "not supported" in text)
+    return "temperature" in text and (
+        "deprecated" in text or "unsupported" in text or "not supported" in text
+    )
 
 
 def _build(model: str, temperature: float | None, max_tokens: int) -> ChatAnthropic:

@@ -23,14 +23,18 @@ def _stub_report(query: str, depth: str):
             "title": "Stubbed deep brief",
             "tldr": ["A takeaway", "Another pass"],
             "executive_summary": "It happened.",
-            "key_developments": [{"claim": "Claim", "evidence": "Because.", "sources": ["s1"], "confidence": "high"}],
+            "key_developments": [
+                {"claim": "Claim", "evidence": "Because.", "sources": ["s1"], "confidence": "high"}
+            ],
             "what_to_watch_next": ["Watch the pricing page"],
         },
         query=query,
         depth=depth,
     )
     report.sources = [
-        Source(id="s1", title="Primary post", url="https://example.com/post", kind="web", quote="quote"),
+        Source(
+            id="s1", title="Primary post", url="https://example.com/post", kind="web", quote="quote"
+        ),
     ]
     report.verification.checked = 1
     report.verification.supported = 1
@@ -67,7 +71,14 @@ def stub_pipeline(monkeypatch):
         return {
             "session_id": session_id or "test-session",
             "report": report.model_dump(),
-            "citations": [{"source_name": "Primary post", "page_number": None, "content_snippet": "quote", "relevance_score": None}],
+            "citations": [
+                {
+                    "source_name": "Primary post",
+                    "page_number": None,
+                    "content_snippet": "quote",
+                    "relevance_score": None,
+                }
+            ],
             "agent_steps": [
                 {"agent_name": "Planner", "action": "Planned", "tools_used": []},
                 {"agent_name": "Writer", "action": "Wrote", "tools_used": []},
@@ -93,7 +104,9 @@ def _wait_for(client: TestClient, job_id: str, timeout: float = 5.0) -> dict:
 
 
 def test_run_lifecycle_from_start_to_export(client, stub_pipeline):
-    started = client.post("/research/start", json={"query": "What changed in GPU supply?", "depth": "brief"})
+    started = client.post(
+        "/research/start", json={"query": "What changed in GPU supply?", "depth": "brief"}
+    )
     assert started.status_code == 200
     payload = started.json()
     assert payload["job_id"] and payload["brief_id"]
@@ -142,7 +155,9 @@ def test_stream_delivers_events_then_closes(client, stub_pipeline):
 
 
 def test_stream_replays_a_finished_run(client, stub_pipeline):
-    job_id = client.post("/research/start", json={"query": "Replay me", "depth": "deep"}).json()["job_id"]
+    job_id = client.post("/research/start", json={"query": "Replay me", "depth": "deep"}).json()[
+        "job_id"
+    ]
     _wait_for(client, job_id)
 
     body = client.get(f"/research/jobs/{job_id}/stream").text

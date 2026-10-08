@@ -49,16 +49,17 @@ Core types (Pydantic):
 
 ```python
 class Decision(BaseModel):
-    label: str            # task-specific, e.g. "relevant" / "supported"
-    score: float          # 0..1 calibrated
-    confidence: float     # 0..1 model's self-reported calibration
-    backend: str          # "jev" | "local" | "s2:<model>"
+    label: str  # task-specific, e.g. "relevant" / "supported"
+    score: float  # 0..1 calibrated
+    confidence: float  # 0..1 model's self-reported calibration
+    backend: str  # "jev" | "local" | "s2:<model>"
     latency_ms: int
 
+
 class S1Request(BaseModel):
-    task: str             # "relevance" | "claim_support" | "query_class" | ...
-    context: str          # item text / claim+evidence / query
-    options: list[str]    # candidate labels
+    task: str  # "relevance" | "claim_support" | "query_class" | ...
+    context: str  # item text / claim+evidence / query
+    options: list[str]  # candidate labels
     profile_hint: str | None = None
 ```
 

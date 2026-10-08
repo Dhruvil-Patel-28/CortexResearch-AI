@@ -71,7 +71,7 @@ def load_profile(path: str | None = None) -> Profile:
     """Load the YAML profile; falls back to a neutral default when missing."""
     p = Path(path or settings.profile_path)
     if not p.exists():
-        logger.warning(f"Profile not found at {p} — using neutral defaults")
+        logger.warning("Profile not found at %s — using neutral defaults", p)
         return Profile()
 
     raw = p.read_bytes()
@@ -111,4 +111,3 @@ def save_profile(data: dict, path: str | None = None) -> Profile:
 
     p.write_text(yaml.safe_dump(clean, sort_keys=False, allow_unicode=True), encoding="utf-8")
     return load_profile(str(p))
-

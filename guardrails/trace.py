@@ -43,7 +43,9 @@ def record_output(redactions: list[dict], injection_risk: float) -> None:
     try:
         with _lock:
             _totals["output_redactions"] += sum(r.get("count", 0) for r in redactions or [])
-            _totals["output_injection_risk"] = max(_totals["output_injection_risk"], injection_risk or 0.0)
+            _totals["output_injection_risk"] = max(
+                _totals["output_injection_risk"], injection_risk or 0.0
+            )
     except Exception as exc:  # noqa: BLE001 — tracing must never break a run
         logger.debug("guardrail trace record_output failed: %s", exc)
 

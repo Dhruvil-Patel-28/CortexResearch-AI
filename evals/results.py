@@ -32,7 +32,10 @@ class JudgeResult(BaseModel):
     dimensions: list[JudgeDimension] = Field(default_factory=list)
     weighted_score: float = 0.0
     verdict: str = "needs-review"  # publishable | needs-review | error
-    facts: dict = Field(default_factory=dict, description="Deterministic facts computed in Python (section presence, citation counts)")
+    facts: dict = Field(
+        default_factory=dict,
+        description="Deterministic facts computed in Python (section presence, citation counts)",
+    )
     model: str = ""
     cost_usd: float = 0.0
     judged_at: float = Field(default_factory=time.time)

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import feedparser
@@ -27,7 +27,7 @@ def strip_html(text: str) -> str:
 def load_feeds(path: str | None = None) -> list[dict]:
     p = Path(path or settings.feeds_path)
     if not p.exists():
-        logger.warning(f"Feeds file not found: {p}")
+        logger.warning("Feeds file not found: %s", p)
         return []
     data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
     return [f for f in (data.get("feeds") or []) if f.get("url")]
@@ -47,9 +47,9 @@ def parse_rss_feed(text: str, feed_name: str = "", source: str = "rss") -> list[
 
         published = ""
         if e.get("published_parsed"):
-            published = datetime(*e["published_parsed"][:6], tzinfo=timezone.utc).isoformat()
+            published = datetime(*e["published_parsed"][:6], tzinfo=UTC).isoformat()
         elif e.get("updated_parsed"):
-            published = datetime(*e["updated_parsed"][:6], tzinfo=timezone.utc).isoformat()
+            published = datetime(*e["updated_parsed"][:6], tzinfo=UTC).isoformat()
 
         summary = strip_html(e.get("summary") or e.get("description") or "")
 
@@ -83,7 +83,7 @@ class RssAdapter(SourceAdapter):
                 parsed = parse_rss_feed(resp.text, feed_name=name, source="rss")
                 items.extend(parsed[: settings.rss_max_per_feed])
             except Exception as e:  # noqa: BLE001 — one dead feed must not break the run
-                logger.warning(f"RSS feed failed ({name}): {e}")
+                logger.warning("RSS feed failed (%s): %s", name, e)
 
-        logger.info(f"RSS: {len(items)} entries from {len(feeds)} feeds")
+        logger.info("RSS: %s entries from %s feeds", len(items), len(feeds))
         return items[:limit]

@@ -247,9 +247,7 @@ class Retriever:
         try:
             import numpy as np
 
-            vectors = np.asarray(
-                embed([d.text[:1500] for d in docs]), dtype="float32"
-            )
+            vectors = np.asarray(embed([d.text[:1500] for d in docs]), dtype="float32")
             if vectors.ndim == 1:
                 vectors = vectors.reshape(1, -1)
             self._vectors = np.atleast_2d(vectors)
@@ -263,9 +261,7 @@ class Retriever:
             out_dir.mkdir(parents=True, exist_ok=True)
             np.save(out_dir / "vectors.npy", self._vectors)
             (out_dir / "docs.json").write_text(
-                json.dumps(
-                    [d.__dict__ for d in docs], ensure_ascii=False, default=str
-                ),
+                json.dumps([d.__dict__ for d in docs], ensure_ascii=False, default=str),
                 encoding="utf-8",
             )
         except Exception as e:  # noqa: BLE001 — dense leg must never break search
@@ -282,8 +278,7 @@ class Retriever:
         try:
             with closing(db.connect()) as con:
                 rows = con.execute(
-                    "SELECT ref_id FROM rag_fts WHERE rag_fts MATCH ? "
-                    "ORDER BY rank LIMIT ?",
+                    "SELECT ref_id FROM rag_fts WHERE rag_fts MATCH ? ORDER BY rank LIMIT ?",
                     (fts_q, k),
                 ).fetchall()
             return {r["ref_id"]: rank for rank, r in enumerate(rows)}
@@ -364,7 +359,7 @@ class Retriever:
                 if ce:
                     scores = {
                         d.ref_id: 1.0 / (1.0 + math.exp(-min(s, 20.0)))
-                        for d, s in zip(candidates, ce)
+                        for d, s in zip(candidates, ce, strict=False)
                     }
                     candidates.sort(key=lambda d: scores[d.ref_id], reverse=True)
             except Exception as e:  # noqa: BLE001 — fall back to RRF order
@@ -417,9 +412,7 @@ def get_embedder() -> EmbedFn | None:
             model = SentenceTransformer(settings.embedding_model)
 
             def _shared_embedder_fn(texts):
-                return model.encode(
-                    texts, normalize_embeddings=True, show_progress_bar=False
-                )
+                return model.encode(texts, normalize_embeddings=True, show_progress_bar=False)
 
             _shared_embedder = _shared_embedder_fn
             logger.info("Embedding model loaded: %s", settings.embedding_model)

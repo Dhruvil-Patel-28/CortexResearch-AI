@@ -97,7 +97,13 @@ def writer_node(state: ResearchState) -> dict:
             "Writer failed twice to produce report content — failing the run "
             "rather than publishing an empty report"
         )
-    emit_event(state, "stage", stage="written", label=f"Draft ready — {report.reading_time_min} min read", pct=72)
+    emit_event(
+        state,
+        "stage",
+        stage="written",
+        label=f"Draft ready — {report.reading_time_min} min read",
+        pct=72,
+    )
 
     step = {
         "agent_name": "Writer",
@@ -119,17 +125,36 @@ def reviser_node(state: ResearchState) -> dict:
     unsupported = verification.get("unsupported_claims") or []
 
     if not draft:
-        fallback = coerce_report({}, query=state.get("research_query", ""), depth=state.get("depth", "standard"))
-        return {"report": fallback.model_dump(), "agent_steps": [
-            {"agent_name": "Reviser", "action": "No draft available — emitted an empty schema-valid report", "tools_used": []}
-        ]}
+        fallback = coerce_report(
+            {}, query=state.get("research_query", ""), depth=state.get("depth", "standard")
+        )
+        return {
+            "report": fallback.model_dump(),
+            "agent_steps": [
+                {
+                    "agent_name": "Reviser",
+                    "action": "No draft available — emitted an empty schema-valid report",
+                    "tools_used": [],
+                }
+            ],
+        }
 
     if not unsupported:
-        emit_event(state, "stage", stage="verified", label="All claims supported — no revision needed", pct=92)
+        emit_event(
+            state,
+            "stage",
+            stage="verified",
+            label="All claims supported — no revision needed",
+            pct=92,
+        )
         return {
             "report": draft,
             "agent_steps": [
-                {"agent_name": "Reviser", "action": "Verification clean — draft published unchanged", "tools_used": []}
+                {
+                    "agent_name": "Reviser",
+                    "action": "Verification clean — draft published unchanged",
+                    "tools_used": [],
+                }
             ],
         }
 
@@ -147,9 +172,11 @@ def reviser_node(state: ResearchState) -> dict:
     # guards below) publish an empty shell over a good draft.
     patched = _patch_draft(state, draft, unsupported)
     if patched is not None:
-        revised = coerce_report(patched, query=state.get("research_query", ""), depth=state.get("depth", "standard"))
+        revised = coerce_report(
+            patched, query=state.get("research_query", ""), depth=state.get("depth", "standard")
+        )
         valid_ids = {s.get("id") for s in (state.get("source_registry") or [])}
-        revised.sources = [s for s in _registry_models(state.get("source_registry") or [])]
+        revised.sources = list(_registry_models(state.get("source_registry") or []))
         # Invariant: no claim may survive without at least one valid citation.
         revised.key_developments = [
             dev.model_copy(update={"sources": [sid for sid in dev.sources if sid in valid_ids]})
@@ -175,20 +202,31 @@ def reviser_node(state: ResearchState) -> dict:
     # citation is dropped even without a model patch. Judgement-flagged claims
     # stay, labelled for the reader.
     draft_out["key_developments"] = [
-        dev for dev in (draft.get("key_developments") or [])
+        dev
+        for dev in (draft.get("key_developments") or [])
         if any(sid in valid_ids for sid in (dev.get("sources") or []))
     ]
-    draft_report = coerce_report(draft_out, query=state.get("research_query", ""), depth=state.get("depth", "standard"))
-    draft_report.sources = [s for s in _registry_models(state.get("source_registry") or [])]
+    draft_report = coerce_report(
+        draft_out, query=state.get("research_query", ""), depth=state.get("depth", "standard")
+    )
+    draft_report.sources = list(_registry_models(state.get("source_registry") or []))
     draft_report.verification = _final_verification(draft_report, verification)
-    emit_event(state, "stage", stage="verified", label="Draft published with flagged claims labelled", pct=95)
+    emit_event(
+        state,
+        "stage",
+        stage="verified",
+        label="Draft published with flagged claims labelled",
+        pct=95,
+    )
     return {
         "report": draft_report.model_dump(),
-        "agent_steps": [{
-            "agent_name": "Reviser",
-            "action": "Could not patch — kept the verified draft and labelled flagged claims",
-            "tools_used": [],
-        }],
+        "agent_steps": [
+            {
+                "agent_name": "Reviser",
+                "action": "Could not patch — kept the verified draft and labelled flagged claims",
+                "tools_used": [],
+            }
+        ],
     }
 
 
@@ -256,9 +294,10 @@ def _patch_draft(
     for pos, (i, raw) in enumerate(flagged):
         dev = developments[i]
         cited = [sid for sid in (dev.get("sources") or []) if sid in registry]
-        evidence = "\n\n".join(
-            f"[{sid}] {(registry[sid].get('quote') or '')[:600]}" for sid in cited
-        ) or "(no usable evidence)"
+        evidence = (
+            "\n\n".join(f"[{sid}] {(registry[sid].get('quote') or '')[:600]}" for sid in cited)
+            or "(no usable evidence)"
+        )
         numbered.append(
             f"{pos}. draft index {i}\nCLAIM: {dev.get('claim')}\n"
             f"VERIFIER REASON: {raw.get('reason', '')}\nCITED EVIDENCE:\n{evidence}"
@@ -296,11 +335,12 @@ Return one patch per flagged claim, using its position as `index`."""
                 **patched_devs[rev.index],
                 "claim": new_claim,
                 "evidence": rev.evidence.strip() or patched_devs[rev.index].get("evidence", ""),
-                "sources": [sid for sid in patched_devs[rev.index].get("sources") or [] if sid in valid_ids],
+                "sources": [
+                    sid for sid in patched_devs[rev.index].get("sources") or [] if sid in valid_ids
+                ],
                 "confidence": "revised",
             }
-    draft_out = {**draft, "key_developments": [d for d in patched_devs if d]}
-    return draft_out
+    return {**draft, "key_developments": [d for d in patched_devs if d]}
 
 
 def _generate(
@@ -317,15 +357,16 @@ def _generate(
     meter: CostMeter | None = state.get("meter")
 
     valid_ids = {s.get("id") for s in registry}
-    source_block = "\n".join(
-        f"[{s.get('id')}] {s.get('title')} — {s.get('url') or 'no url'} "
-        f"(kind={s.get('kind')}, published={(s.get('published_at') or 'unknown')[:10]})"
-        for s in registry
-    ) or "[no sources registered]"
-
-    sub_questions = "\n".join(
-        f"- {sq.get('question')}" for sq in (plan.get("sub_questions") or [])
+    source_block = (
+        "\n".join(
+            f"[{s.get('id')}] {s.get('title')} — {s.get('url') or 'no url'} "
+            f"(kind={s.get('kind')}, published={(s.get('published_at') or 'unknown')[:10]})"
+            for s in registry
+        )
+        or "[no sources registered]"
     )
+
+    sub_questions = "\n".join(f"- {sq.get('question')}" for sq in (plan.get("sub_questions") or []))
     reader_profile = _reader_profile_block()
 
     prompt = f"""Write the research report.
@@ -337,10 +378,10 @@ READER PROFILE
 {reader_profile}
 
 SUB-QUESTIONS THE READER EXPECTS ANSWERED
-{sub_questions or '- ' + query}
+{sub_questions or "- " + query}
 
 TARGET LENGTH
-{DEPTH_TARGET_WORDS.get(depth, DEPTH_TARGET_WORDS['standard'])} words across all text fields.
+{DEPTH_TARGET_WORDS.get(depth, DEPTH_TARGET_WORDS["standard"])} words across all text fields.
 
 EVIDENCE (grouped by the sub-question it answers — the only facts you may use)
 {evidence}
@@ -366,10 +407,17 @@ Do not output a `sources` array — it is attached automatically from the regist
             else ""
         )
         try:
-            response = invoke_llm(llm, [SystemMessage(content=WRITER_SYSTEM), HumanMessage(content=prompt + nudge)], meter=meter, label=label if attempt == 1 else f"{label}_retry")
+            response = invoke_llm(
+                llm,
+                [SystemMessage(content=WRITER_SYSTEM), HumanMessage(content=prompt + nudge)],
+                meter=meter,
+                label=label if attempt == 1 else f"{label}_retry",
+            )
             content = response.content
             if isinstance(content, list):
-                content = "".join(b.get("text", "") if isinstance(b, dict) else str(b) for b in content)
+                content = "".join(
+                    b.get("text", "") if isinstance(b, dict) else str(b) for b in content
+                )
             raw = json_object_from(str(content))
             break
         except JsonCallError as exc:
@@ -383,14 +431,16 @@ Do not output a `sources` array — it is attached automatically from the regist
 
     report = coerce_report(raw, query=query, depth=depth)
     report.depth = depth if depth in {"brief", "standard", "deep"} else "standard"
-    report.sources = [s for s in _registry_models(registry)]
+    report.sources = list(_registry_models(registry))
     report.key_developments = [
         dev.model_copy(update={"sources": [sid for sid in dev.sources if sid in valid_ids]})
         for dev in report.key_developments
         if dev.claim.strip()
     ]
     report.timeline = [
-        entry.model_copy(update={"source_id": entry.source_id if entry.source_id in valid_ids else None})
+        entry.model_copy(
+            update={"source_id": entry.source_id if entry.source_id in valid_ids else None}
+        )
         for entry in report.timeline
     ]
     report.reading_time_min = estimate_reading_time(_word_count(report))

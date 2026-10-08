@@ -37,3 +37,6 @@ python-dotenv>=1.0.0
 
 # --- Dev / Test ---
 pytest>=8.0.0
+# Pinned: ruff.toml is the contract for lint and format, so the tool version
+# must not drift between a laptop and CI.
+ruff==0.16.10

@@ -38,10 +38,15 @@ def classify_query(query: str) -> dict:
         kb = router.decide(
             S1Request(task="kb_relevance", context=query[:500], options=["irrelevant", "relevant"])
         )
-        return {"domain": domain.label, "kb_relevant": kb.label == "relevant", "backend": domain.backend}
+        return {
+            "domain": domain.label,
+            "kb_relevant": kb.label == "relevant",
+            "backend": domain.backend,
+        }
     except Exception as exc:  # noqa: BLE001 — a hint is optional by design
         logger.info("Query classification unavailable (%s) — planner proceeds unhinted", exc)
         return {}
+
 
 PLANNER_SYSTEM = """You are the Planner of an autonomous research team.
 
@@ -111,7 +116,9 @@ def _fallback_plan(query: str, depth: str) -> ResearchPlan:
     return ResearchPlan(
         title=query[:120],
         scope="Planner unavailable — using the raw query as a single research thread.",
-        sub_questions=[SubQuestion(question=query, why="Direct answer to the request.", search_queries=[query])],
+        sub_questions=[
+            SubQuestion(question=query, why="Direct answer to the request.", search_queries=[query])
+        ],
     )
 
 

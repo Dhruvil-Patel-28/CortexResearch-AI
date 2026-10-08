@@ -3,18 +3,20 @@ System 1 / System 2 model routing.
 
 System 1 = fast, calibrated *decisions* (Jev, or the local fallback) instead of
 generated text. System 2 = chat-tier deliberation, consulted only when the
-reflex is unsure. See docs/superpowers/specs/2026-10-07-system1-routing-design.md.
+reflex is unsure. See docs/specs/2026-10-07-system1-routing-design.md.
 """
 
 from __future__ import annotations
 
 import logging
 import time
+from collections import deque
+from collections.abc import Callable
 from typing import Any, Protocol
 
 import httpx
 import numpy as np
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from utils.config import settings
 
@@ -98,7 +100,7 @@ class JevBackend:
                 DECISION_KEY: {
                     "type": "choice",
                     "instructions": instructions,
-                    "criteria": {option: None for option in request.options},
+                    "criteria": dict.fromkeys(request.options),
                 }
             },
         }
@@ -182,7 +184,9 @@ class LocalCalibratedBackend:
         """rows = (text, relevance 0-10). ≥7 → positive, ≤4 → negative."""
         labeled = [(t, 1.0) for t, r in rows if r >= 7.0] + [(t, 0.0) for t, r in rows if r <= 4.0]
         if len(labeled) < 5:
-            logger.info("S1 local backend undertrained (%d labeled rows) — staying neutral", len(labeled))
+            logger.info(
+                "S1 local backend undertrained (%d labeled rows) — staying neutral", len(labeled)
+            )
             self._w = None
             return
         texts = np.array([t for t, _ in labeled])
@@ -215,11 +219,6 @@ class LocalCalibratedBackend:
 
 
 # ── Router / breaker / decision log ────────────────────────────────────
-
-from collections import deque
-from collections.abc import Callable
-
-from pydantic import ValidationError
 
 
 class DecisionLog:

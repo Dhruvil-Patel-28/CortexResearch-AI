@@ -8,7 +8,7 @@ signal ("recently created repos gaining stars fast") in a stable form.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sources.base import FeedItem, SourceAdapter, http_get
 from utils.config import settings
@@ -53,7 +53,7 @@ class GitHubTrendingAdapter(SourceAdapter):
     name = "github"
 
     def fetch(self, limit: int = 25, keywords: list[str] | None = None) -> list[FeedItem]:
-        since = (datetime.now(timezone.utc) - timedelta(days=settings.github_days)).strftime("%Y-%m-%d")
+        since = (datetime.now(UTC) - timedelta(days=settings.github_days)).strftime("%Y-%m-%d")
         query = f"created:>{since} stars:>{settings.github_min_stars}"
 
         try:
@@ -64,9 +64,9 @@ class GitHubTrendingAdapter(SourceAdapter):
                 timeout=20.0,
             )
         except Exception as e:  # noqa: BLE001
-            logger.warning(f"GitHub search failed: {e}")
+            logger.warning("GitHub search failed: %s", e)
             return []
 
         items = parse_github_search(resp.json())
-        logger.info(f"GitHub: {len(items)} trending repos ({query})")
+        logger.info("GitHub: %s trending repos (%s)", len(items), query)
         return items[:limit]

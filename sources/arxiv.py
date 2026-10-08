@@ -83,9 +83,9 @@ class ArxivAdapter(SourceAdapter):
                 timeout=30.0,
             )
         except Exception as e:  # noqa: BLE001
-            logger.warning(f"arXiv request failed: {e}")
+            logger.warning("arXiv request failed: %s", e)
             return []
 
         items = parse_arxiv_feed(resp.text)
-        logger.info(f"arXiv: {len(items)} papers for query '{query[:80]}'")
+        logger.info("arXiv: %s papers for query '%s'", len(items), query[:80])
         return items[:limit]
