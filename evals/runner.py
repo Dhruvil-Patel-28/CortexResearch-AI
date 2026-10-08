@@ -15,9 +15,8 @@ import sys
 
 from evals import results
 from evals import guardrails_eval
+from evals import report_judge
 from evals.guardrails_eval import format_report
-from evals.report_judge import format_report as format_judge
-from evals.report_judge import judge_report
 from utils.config import settings
 
 
@@ -88,8 +87,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.suite in ("judge", "all"):
         report = _load_report(args.report_id)
-        judged = judge_report(report)
-        print(format_judge(judged))
+        judged = report_judge.judge_report(report)
+        print(report_judge.format_report(judged))
         if not args.no_save:
             path = results.save(judged, "judge")
             print(f"saved → {path}")

@@ -36,37 +36,32 @@ def test_guardrails_suite_saves_result_file():
     assert "precision" in data
 
 
-def test_judge_suite_with_stub(monkeypatch, capsys):
+def _stub_judge_ok(monkeypatch):
     from evals import report_judge
+    from evals.report_judge import JudgePayload
+    from evals.results import JudgeDimension
 
     monkeypatch.setattr(
         report_judge,
         "call_json",
-        lambda prompt, **kw: {
-            "dimensions": [
-                {"name": name, "score": 9.0, "rationale": "ok"}
+        lambda llm, **kw: JudgePayload(
+            dimensions=[
+                JudgeDimension(name=name, score=9.0, rationale="ok")
                 for name in report_judge.DIMENSIONS
             ]
-        },
+        ),
     )
+
+
+def test_judge_suite_with_stub(monkeypatch, capsys):
+    _stub_judge_ok(monkeypatch)
     code = runner.main(["--suite", "judge", "--no-save"])
     assert code == 0
     assert "publishable" in capsys.readouterr().out
 
 
 def test_all_suite_runs_both(monkeypatch, capsys):
-    from evals import report_judge
-
-    monkeypatch.setattr(
-        report_judge,
-        "call_json",
-        lambda prompt, **kw: {
-            "dimensions": [
-                {"name": name, "score": 9.0, "rationale": "ok"}
-                for name in report_judge.DIMENSIONS
-            ]
-        },
-    )
+    _stub_judge_ok(monkeypatch)
     code = runner.main(["--suite", "all", "--no-save"])
     assert code == 0
     out = capsys.readouterr().out

@@ -17,8 +17,12 @@ from __future__ import annotations
 import json
 import logging
 
+from pydantic import BaseModel, Field
+
 from schemas.report import ResearchReportV2, coerce_report
 from utils.config import settings
+from utils.cost import CostMeter
+from utils.llm import LLMClient
 from utils.llm_json import call_json
 
 from evals.results import JudgeResult, JudgeDimension
@@ -28,31 +32,18 @@ logger = logging.getLogger(__name__)
 DIMENSIONS = ["groundedness", "coverage", "coherence", "citation_hygiene"]
 PUBLISH_THRESHOLD = 8.0
 
+
+class JudgePayload(BaseModel):
+    """Structured judge response schema."""
+
+    dimensions: list[JudgeDimension] = Field(default_factory=list)
+
 _DIMENSION_GUIDES = {
     "groundedness": "Are the key_developments claims actually supported by their cited sources? Spot-check at least three developments against their source quotes/urls.",
     "coverage": "Does the report fill the schema-v2 sections appropriate for its depth (tldr, executive_summary, background_primer, key_developments, implications, sources)? Penalise thin or empty sections for the stated depth.",
     "coherence": "Does it read as one coherent analysis rather than stitched-together snippets? Contradictions between sections are the main failure.",
     "citation_hygiene": "Does every key development cite at least one source? Are all cited ids resolvable in sources? (The deterministic facts below give exact counts.)",
 }
-
-_PROMPT_TEMPLATE = """You are a strict but fair report-quality judge. Score the research report below.
-
-Deterministic facts (computed by code — trust these over your own counting):
-{facts}
-
-Score each dimension 0-10 with a one-line rationale. Score ONLY — never rewrite the report.
-
-Dimension guides:
-{guides}
-
-Respond with JSON: {{"dimensions": [{{"name": "groundedness", "score": 0.0, "rationale": "..."}}, ...]}}
-Exactly these names: {names}
-
-Report:
----
-{report}
----"""
-
 
 def compute_facts(report: ResearchReportV2) -> dict:
     """Deterministic facts the judge receives as ground truth."""
@@ -100,14 +91,22 @@ def compute_facts(report: ResearchReportV2) -> dict:
     }
 
 
-def _build_prompt(report: ResearchReportV2, facts: dict) -> str:
+def _build_user_prompt(report: ResearchReportV2, facts: dict) -> str:
     guides = "\n".join(f"- {name}: {_DIMENSION_GUIDES[name]}" for name in DIMENSIONS)
-    return _PROMPT_TEMPLATE.format(
-        facts=json.dumps(facts, indent=2),
-        guides=guides,
-        names=", ".join(DIMENSIONS),
-        report=report.model_dump_json(exclude={"model_trace"}),
-    )
+    return f"""Deterministic facts (computed by code — trust these over your own counting):
+{json.dumps(facts, indent=2)}
+
+Score each dimension 0-10 with a one-line rationale.
+
+Dimension guides:
+{guides}
+
+Respond with exactly these dimension names: {", ".join(DIMENSIONS)}
+
+Report:
+---
+{report.model_dump_json(exclude={"model_trace", "verification", "cost_usd", "created_at"})}
+---"""
 
 
 def _weighted(dimensions: list[JudgeDimension]) -> float:
@@ -118,8 +117,16 @@ def _weighted(dimensions: list[JudgeDimension]) -> float:
     return round((2 * g + rest) / 5.0, 2)
 
 
+JUDGE_SYSTEM = (
+    "You are a strict but fair report-quality judge. Score the research report "
+    "against the given rubric. Score ONLY — never rewrite the report. Respond "
+    "with JSON matching the schema exactly."
+)
+
+
 def judge_report(report: dict | ResearchReportV2) -> JudgeResult:
     """Score one report. Never raises — failures become verdict="error"."""
+    meter = CostMeter()
     try:
         if isinstance(report, dict):
             report = coerce_report(report, keep_verification=True)
@@ -128,25 +135,18 @@ def judge_report(report: dict | ResearchReportV2) -> JudgeResult:
         facts = compute_facts(report)
 
         model = settings.evals_judge_model or settings.model_fast
+        llm = LLMClient(model, 0.0, settings.max_tokens_fast)
         payload = call_json(
-            _build_prompt(report, facts),
-            model=model,
+            llm,
+            system=JUDGE_SYSTEM,
+            user=_build_user_prompt(report, facts),
+            schema=JudgePayload,
+            meter=meter,
             label="eval:report-judge",
         )
-        dimensions = []
-        for raw in payload.get("dimensions", []):
-            if not isinstance(raw, dict):
-                continue
-            name = str(raw.get("name", "")).strip().lower()
-            if name not in DIMENSIONS:
-                continue
-            try:
-                score = max(0.0, min(10.0, float(raw.get("score", 0))))
-            except (TypeError, ValueError):
-                continue
-            dimensions.append(
-                JudgeDimension(name=name, score=score, rationale=str(raw.get("rationale", ""))[:200])
-            )
+        dimensions = [
+            d for d in payload.dimensions if d.name in DIMENSIONS
+        ]
         if len(dimensions) < len(DIMENSIONS):
             raise ValueError(f"judge returned {len(dimensions)}/{len(DIMENSIONS)} valid dimensions")
 
@@ -158,6 +158,7 @@ def judge_report(report: dict | ResearchReportV2) -> JudgeResult:
             verdict=verdict,
             facts=facts,
             model=model,
+            cost_usd=meter.total_usd,
             report_title=report.title,
         )
     except Exception as exc:  # noqa: BLE001 — judging must never crash the caller
