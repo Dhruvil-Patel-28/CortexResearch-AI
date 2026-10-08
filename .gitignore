@@ -189,3 +189,6 @@ data/digests/
 data/rag/
 .superpowers/
 data/evals/
+
+# Local user infrastructure (self-hosted Langfuse etc.) — never commit
+local/

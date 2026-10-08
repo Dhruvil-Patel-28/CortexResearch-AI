@@ -12,7 +12,14 @@ type Stage = { stage?: string; ingest?: { new?: number }; score?: { scored?: num
  * Triggers a background ingest + score run and reports live progress while it
  * polls the job.
  */
-export function RefreshButton({ onDone }: { onDone?: () => void }) {
+export function RefreshButton({
+  onDone,
+  compact = false,
+}: {
+  onDone?: () => void;
+  /** Icon-only variant for the narrow-viewport header. */
+  compact?: boolean;
+}) {
   const [job, setJob] = useState<Job | null>(null);
   const busy = job?.status === "pending" || job?.status === "running";
 
@@ -54,6 +61,25 @@ export function RefreshButton({ onDone }: { onDone?: () => void }) {
         : stage?.startsWith("score")
           ? `Scoring… (${progress.score?.scored ?? 0})`
           : "Fetching sources…";
+
+  if (compact) {
+    return (
+      <button
+        onClick={start}
+        disabled={busy}
+        title={label}
+        aria-label={label}
+        className={cn(
+          "grid size-9 shrink-0 place-items-center rounded-lg border transition-colors focus-ring",
+          busy
+            ? "border-line bg-surface-2 text-ink-faint"
+            : "border-accent/40 bg-accent/15 text-accent-soft hover:bg-accent/25",
+        )}
+      >
+        {busy ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+      </button>
+    );
+  }
 
   return (
     <button

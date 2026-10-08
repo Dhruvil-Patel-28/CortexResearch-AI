@@ -22,19 +22,61 @@ const NAV = [
   { href: "/topics", label: "Interests", hint: "Your profile", icon: SlidersHorizontal },
 ];
 
-function Logo() {
+function isActive(pathname: string, href: string) {
+  return href === "/" ? pathname === "/" : pathname.startsWith(href);
+}
+
+function Logo({ compact = false }: { compact?: boolean }) {
   return (
-    <Link href="/" className="group flex items-center gap-2.5 rounded-lg px-1 py-1 focus-ring">
+    <Link href="/" className="group flex items-center gap-2.5 rounded-lg py-1 focus-ring">
       <span className="relative grid size-8 place-items-center rounded-[10px] bg-gradient-to-br from-accent to-warning text-shell shadow-[0_0_16px_-4px] shadow-accent/60 transition-shadow group-hover:shadow-accent/90">
         <Radar className="size-4" strokeWidth={2.4} />
       </span>
       <span className="leading-tight">
         <span className="block text-[15px] font-bold tracking-tight text-ink">Cortex</span>
-        <span className="block font-mono text-[9px] uppercase tracking-[0.18em] text-ink-faint">
-          signal observatory
-        </span>
+        {!compact && (
+          <span className="block font-mono text-[9px] uppercase tracking-[0.18em] text-ink-faint">
+            signal observatory
+          </span>
+        )}
       </span>
     </Link>
+  );
+}
+
+/** Horizontal, scrollable nav used below the md breakpoint. */
+function MobileNav() {
+  const pathname = usePathname();
+
+  return (
+    <nav
+      aria-label="Primary"
+      className="scrollbar-none mt-2.5 flex gap-1 overflow-x-auto px-3 pb-2.5"
+    >
+      {NAV.map((item) => {
+        const active = isActive(pathname, item.href);
+        const Icon = item.icon;
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            aria-current={active ? "page" : undefined}
+            className={cn(
+              "flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors focus-ring",
+              active
+                ? "border-accent/45 bg-accent/15 text-accent-soft"
+                : "border-line bg-surface-2/60 text-ink-soft hover:border-line-strong hover:text-ink",
+            )}
+          >
+            <Icon
+              className={cn("size-3.5", active ? "text-accent" : "text-ink-faint")}
+              strokeWidth={2.1}
+            />
+            {item.label}
+          </Link>
+        );
+      })}
+    </nav>
   );
 }
 
@@ -50,7 +92,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         <nav className="flex flex-col gap-1">
           {NAV.map((item) => {
-            const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+            const active = isActive(pathname, item.href);
             const Icon = item.icon;
             return (
               <Link
@@ -100,15 +142,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="glass sticky top-0 z-20 flex items-center gap-3 border-b px-4 py-3 md:hidden">
-          <Logo />
-          <nav className="ml-auto flex gap-3 text-xs">
-            {NAV.map((item) => (
-              <Link key={item.href} href={item.href} className="text-ink-soft transition-colors hover:text-ink">
-                {item.label}
-              </Link>
-            ))}
-          </nav>
+        <header className="glass sticky top-0 z-30 border-b md:hidden">
+          <div className="flex items-center gap-3 px-4 py-2">
+            <Logo compact />
+            <span className="ml-auto flex items-center gap-2 text-[11px] text-ink-faint">
+              <span className="relative flex size-1.5">
+                <span className="absolute inline-flex size-full animate-ping rounded-full bg-positive opacity-60" />
+                <span className="relative inline-flex size-1.5 rounded-full bg-positive" />
+              </span>
+              live
+            </span>
+            <RefreshButton compact />
+          </div>
+          <MobileNav />
         </header>
 
         <main className="min-w-0 flex-1">{children}</main>
