@@ -2,7 +2,15 @@
 
 from __future__ import annotations
 
+import os
+
 import pytest
+
+# Settings requires an Anthropic key, and a clean checkout (CI included) has no
+# .env. A placeholder set before the first app import keeps the suite runnable
+# anywhere — and because real environment variables outrank .env values, tests
+# can never make live, billable model calls even when a working key is on disk.
+os.environ["ANTHROPIC_API_KEY"] = "placeholder-set-by-tests"
 
 
 @pytest.fixture(autouse=True)
