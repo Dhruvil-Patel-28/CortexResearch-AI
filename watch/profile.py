@@ -67,10 +67,27 @@ class Profile:
         return "\n".join(lines)
 
 
+def _as_str_list(value: object) -> list[str]:
+    """Coerce a YAML field into a list of non-empty strings.
+
+    A bare string is one entry rather than a sequence of characters, and scalars
+    are stringified so the `"; ".join(...)` calls in `prompt_block` can never
+    raise on a hand-edited file. `interests: AI agents` and `interests: [AI agents]`
+    therefore both work, as users reasonably expect.
+    """
+    if value is None:
+        return []
+    if isinstance(value, str) or not isinstance(value, (list, tuple, set)):
+        value = [value]
+    return [text for text in (str(v).strip() for v in value if v is not None) if text]
+
+
 def load_profile(path: str | None = None) -> Profile:
-    """Load the YAML profile; falls back to a neutral default when missing."""
+    """Load the YAML profile; falls back to a neutral default when unusable."""
     p = Path(path or settings.profile_path)
-    if not p.exists():
+    # is_file, not exists: Docker creates an empty *directory* when a
+    # bind-mounted file is absent on the host, and reading it would raise.
+    if not p.is_file():
         logger.warning("Profile not found at %s — using neutral defaults", p)
         return Profile()
 
@@ -79,12 +96,12 @@ def load_profile(path: str | None = None) -> Profile:
 
     return Profile(
         name=str(data.get("name") or "there"),
-        interests=list(data.get("interests") or []),
-        stack=list(data.get("stack") or []),
-        goals=list(data.get("goals") or []),
-        boost=list(data.get("boost") or []),
-        mute=list(data.get("mute") or []),
-        arxiv_keywords=list(data.get("arxiv_keywords") or []),
+        interests=_as_str_list(data.get("interests")),
+        stack=_as_str_list(data.get("stack")),
+        goals=_as_str_list(data.get("goals")),
+        boost=_as_str_list(data.get("boost")),
+        mute=_as_str_list(data.get("mute")),
+        arxiv_keywords=_as_str_list(data.get("arxiv_keywords")),
         version=sha1(raw).hexdigest()[:12],
     )
 
@@ -98,6 +115,13 @@ def save_profile(data: dict, path: str | None = None) -> Profile:
     """
     p = Path(path or settings.profile_path)
     p.parent.mkdir(parents=True, exist_ok=True)
+    # Docker turns a missing bind-mounted file into an empty directory. Take the
+    # placeholder over so UI edits have somewhere to land, but never a real one.
+    if p.is_dir():
+        try:
+            p.rmdir()
+        except OSError as e:
+            raise OSError(f"{p} is a directory, not a file — refusing to overwrite it") from e
 
     allowed = ("name", "interests", "stack", "goals", "boost", "mute", "arxiv_keywords")
     clean: dict = {}

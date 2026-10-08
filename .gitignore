@@ -197,5 +197,9 @@ local/
 # Agent skill tooling (the vendored skill itself lives in .agents/skills/)
 skills-lock.json
 
+# Personal interest profile — ship the example, keep the real one local
+watch/profile.yaml
+!watch/profile.example.yaml
+
 # Legacy documents kept locally; the pipeline ingests live feeds, not sample PDFs
 data/*.pdf

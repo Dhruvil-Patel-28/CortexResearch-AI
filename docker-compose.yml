@@ -24,6 +24,9 @@ services:
     volumes:
       - cortex-data:/app/data
       - ./watch/feeds.local.yaml:/app/watch/feeds.local.yaml:ro
+      # The interest profile is read *and written* (the /topics UI saves
+      # through the API), so this mount is read-write on purpose.
+      - ./watch/profile.yaml:/app/watch/profile.yaml
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
       interval: 30s
@@ -55,6 +58,9 @@ services:
     volumes:
       - cortex-data:/app/data
       - ./watch/feeds.local.yaml:/app/watch/feeds.local.yaml:ro
+      # The interest profile is read *and written* (the /topics UI saves
+      # through the API), so this mount is read-write on purpose.
+      - ./watch/profile.yaml:/app/watch/profile.yaml
     depends_on:
       api:
         condition: service_healthy

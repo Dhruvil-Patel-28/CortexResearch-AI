@@ -8,6 +8,11 @@
 .env.*
 !.env.example
 
+# The personal interest profile never ships; the committed example does, so a
+# fresh clone still has a template to copy.
+watch/profile.yaml
+!watch/profile.example.yaml
+
 # --- Virtualenvs and caches ---
 venv/
 .venv/

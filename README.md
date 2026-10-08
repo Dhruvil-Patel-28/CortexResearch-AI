@@ -16,6 +16,7 @@ Built by [Dhruvil Patel](https://github.com/Dhruvil-Patel-28).
 ![engine](https://img.shields.io/badge/FastAPI%20%2B%20LangGraph-engine-009688)
 ![web](https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs&logoColor=white)
 ![lint](https://img.shields.io/badge/lint-ruff%20clean-261230)
+![license](https://img.shields.io/badge/license-MIT-3fb950)
 
 [The problem](#the-problem) · [Architecture](#architecture) · [A research run](#a-research-run-end-to-end) ·
 [Under the hood](#under-the-hood) · [Quickstart](#quickstart) · [API](#api-surface)
@@ -416,7 +417,8 @@ calls** (there is a test that asserts exactly that).
 **Docker** (recommended):
 
 ```bash
-cp .env.example .env          # set ANTHROPIC_API_KEY
+cp .env.example .env                      # set ANTHROPIC_API_KEY
+cp watch/profile.example.yaml watch/profile.yaml   # then edit your interests
 docker compose up --build
 # Pulse:     http://localhost:3000
 # API docs:  http://localhost:8000/docs
@@ -426,7 +428,8 @@ docker compose up --build
 
 ```bash
 python -m venv venv && ./venv/bin/pip install -r requirements.txt
-cp .env.example .env          # set ANTHROPIC_API_KEY
+cp .env.example .env                      # set ANTHROPIC_API_KEY
+cp watch/profile.example.yaml watch/profile.yaml   # then edit your interests
 ./venv/bin/uvicorn api.main:app --port 8000
 
 cd web && npm install && npm run dev   # http://localhost:3001
@@ -525,3 +528,6 @@ routing, the eval harness, memory, GraphRAG and the MCP server — have design s
 [`docs/specs/`](docs/specs) written before the code. [`docs/README.md`](docs/README.md)
 indexes them.
 
+## License
+
+MIT — see [LICENSE](LICENSE).

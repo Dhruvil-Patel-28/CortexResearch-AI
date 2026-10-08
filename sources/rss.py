@@ -26,7 +26,9 @@ def strip_html(text: str) -> str:
 
 def load_feeds(path: str | None = None) -> list[dict]:
     p = Path(path or settings.feeds_path)
-    if not p.exists():
+    # is_file, not exists: a bind-mounted path whose host file is missing becomes
+    # an empty directory under Docker, and reading it would raise.
+    if not p.is_file():
         logger.warning("Feeds file not found: %s", p)
         return []
     data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}

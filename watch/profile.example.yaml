@@ -1,0 +1,53 @@
+# CortexResearch interest profile — copy this to `watch/profile.yaml` and edit.
+#
+#   cp watch/profile.example.yaml watch/profile.yaml
+#
+# The ranker reads this file on every ingest: it pre-filters candidates cheaply,
+# then asks the model to score the survivors and write the "why this matters to
+# you" line. Editing any value changes the profile's version hash, which
+# automatically invalidates cached scores so the next run re-scores with your
+# new interests. Your own profile.yaml is gitignored — keep it that way.
+
+name: there
+
+# Broad areas you want to stay on top of. Plain phrases beat keywords here:
+# they are embedded and compared against each item's text.
+interests:
+  - AI agents and agentic workflows
+  - LLM applications and retrieval-augmented generation
+  - developer tooling and open-source AI
+  - AI infrastructure, inference cost and performance
+  - AI startups, launches and funding
+
+# What you actually build with — biases scoring toward things you can use today.
+stack:
+  - Python
+  - FastAPI
+  - LangChain / LangGraph
+  - Next.js / TypeScript
+  - SQLite / PostgreSQL
+
+# What you are working toward. Items that help with these score higher.
+goals:
+  - ship a portfolio project worth showing
+  - keep up with new models, tools and frameworks
+  - learn production LLM engineering (evals, observability, cost control)
+
+# Substrings that always deserve a boost, on top of the semantic score above.
+boost:
+  - agent
+  - MCP
+  - RAG
+  - evaluation
+  - open source
+
+# Never show me these. Case-insensitive substring match — deliberate and final.
+mute:
+  - crypto
+  - NFT
+  - gambling
+
+# Extra keywords sent to arXiv, on top of the interests above.
+arxiv_keywords:
+  - retrieval augmented generation
+  - LLM agents

@@ -7,7 +7,7 @@ from sources.base import FeedItem
 from sources.github_trending import parse_github_search
 from sources.hackernews import parse_hn_item
 from sources.reddit import parse_reddit_rss
-from sources.rss import parse_rss_feed, strip_html
+from sources.rss import load_feeds, parse_rss_feed, strip_html
 
 # ─── Hacker News ───
 
@@ -171,3 +171,38 @@ def test_feeditem_ids_are_stable_and_content_hash_tracks_text():
     c = FeedItem(source="hn", title="T changed", url="https://x", external_id="1")
     assert c.id == a.id  # identity is source+external id, not content
     assert c.content_hash != a.content_hash
+
+
+# ─── Feed list loading (newline-safe under Docker bind mounts) ───
+
+
+def test_load_feeds_reads_urls(tmp_path):
+    feeds = tmp_path / "feeds.yaml"
+    feeds.write_text(
+        "feeds:\n"
+        "  - name: Example\n    url: https://example.com/rss\n    topic: ai\n"
+        "  - name: No URL\n    topic: ai\n",
+        encoding="utf-8",
+    )
+
+    loaded = load_feeds(str(feeds))
+
+    assert [f["url"] for f in loaded] == ["https://example.com/rss"], (
+        "entries without a url are dropped"
+    )
+
+
+def test_load_feeds_tolerates_a_directory_instead_of_a_file(tmp_path):
+    """Docker turns a missing bind-mounted file into an empty directory.
+
+    Returning [] keeps ingest running on the other five sources rather than
+    crashing the whole cycle on a config file the user never created.
+    """
+    mounted = tmp_path / "feeds.local.yaml"
+    mounted.mkdir()
+
+    assert load_feeds(str(mounted)) == []
+
+
+def test_load_feeds_missing_file_returns_empty(tmp_path):
+    assert load_feeds(str(tmp_path / "nope.yaml")) == []
