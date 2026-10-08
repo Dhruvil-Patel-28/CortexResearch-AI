@@ -5,6 +5,22 @@ from __future__ import annotations
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _no_live_system1(monkeypatch):
+    """Keep the suite offline.
+
+    A developer's real ``JEV_API_KEY`` in ``.env`` must never turn System 1
+    into a live network call: tests either stub ``get_router`` or exercise the
+    local calibrated backend. Clear the singleton too, so no router built by an
+    earlier test leaks into this one.
+    """
+    from utils import system1
+    from utils.config import settings
+
+    monkeypatch.setattr(settings, "jev_api_key", "")
+    monkeypatch.setattr(system1, "_router", None)
+
+
 @pytest.fixture()
 def seeded_db(tmp_path, monkeypatch):
     """A tmp SQLite store seeded with two pulse items."""

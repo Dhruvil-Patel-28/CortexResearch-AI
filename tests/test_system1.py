@@ -1,5 +1,6 @@
 """System 1 routing core — offline tests via mocked Jev transport."""
 
+import json
 import time
 
 import httpx
@@ -19,35 +20,88 @@ def _client(handler: httpx.MockTransport, timeout_s: float = 5.0) -> JevBackend:
 
 
 def _request() -> S1Request:
-    return S1Request(task="relevance", context="some item text", options=["low", "high"])
+    return S1Request(
+        task="relevance",
+        context="some item text",
+        options=["low", "high"],
+        profile_hint="interests: AI agents",
+    )
 
 
-def test_jev_happy_path() -> None:
+def _choice_response(label: str = "high", confidence: float = 0.82) -> dict:
+    """A real /systemone response body (choice answer)."""
+    other = {"low": 0.1, "high": 0.9} if label == "high" else {"low": 0.9, "high": 0.1}
+    return {
+        "model": "jev-1.13.0",
+        "answers": {
+            "decision": {
+                "type": "choice",
+                "choice": label,
+                "probabilities": other,
+                "confidence": confidence,
+            }
+        },
+        "usage": {"input_tokens": 296, "output_tokens": 20},
+    }
+
+
+def test_jev_sends_the_real_systemone_contract() -> None:
+    """The pinned wire format: POST /systemone with state + typed choice question."""
     seen: dict = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen["url"] = str(request.url)
         seen["auth"] = request.headers.get("Authorization")
-        seen["body"] = request.read()
-        return httpx.Response(200, json={"label": "high", "score": 0.9, "confidence": 0.82})
+        seen["json"] = json.loads(request.read())
+        return httpx.Response(200, json=_choice_response())
 
-    decision = _client(httpx.MockTransport(handler)).decide(_request())
+    _client(httpx.MockTransport(handler)).decide(_request())
+
+    assert seen["url"].endswith("/v1/systemone"), "the endpoint is /systemone, not /decisions"
+    assert seen["auth"] == "Bearer test-key"
+
+    body = seen["json"]
+    assert body["model"] == "jev-1"
+    assert body["state"] == "some item text"
+    question = body["questions"]["decision"]
+    assert question["type"] == "choice"
+    assert set(question["criteria"]) == {"low", "high"}, "options become the choice criteria keys"
+    assert question["instructions"]["task"] == "relevance"
+    assert question["instructions"]["profile"] == "interests: AI agents"
+
+
+def test_jev_happy_path_maps_choice_to_decision() -> None:
+    decision = _client(httpx.MockTransport(lambda r: httpx.Response(200, json=_choice_response()))).decide(
+        _request()
+    )
     assert decision.label == "high"
-    assert decision.score == pytest.approx(0.9)
+    assert decision.score == pytest.approx(0.9), "score is the chosen option's probability"
     assert decision.confidence == pytest.approx(0.82)
     assert decision.backend == "jev"
     assert decision.latency_ms >= 0
     assert decision.escalated is False
-    assert seen["url"].endswith("/v1/decisions")
-    assert seen["auth"] == "Bearer test-key"
-    body = seen["body"].decode()
-    assert '"task"' in body and '"relevance"' in body
-    assert '"options"' in body and '"low"' in body and '"high"' in body
 
 
 def test_jev_unknown_label_raises() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"label": "banana", "score": 0.9, "confidence": 0.9})
+        return httpx.Response(200, json=_choice_response(label="banana"))
+
+    with pytest.raises(JevError):
+        _client(httpx.MockTransport(handler)).decide(_request())
+
+
+def test_jev_wrong_answer_type_raises() -> None:
+    """A score answer under a choice question is a contract violation."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "model": "jev-1.13.0",
+                "answers": {"decision": {"type": "noul", "noul": 0.9}},
+                "usage": {},
+            },
+        )
 
     with pytest.raises(JevError):
         _client(httpx.MockTransport(handler)).decide(_request())
@@ -55,7 +109,9 @@ def test_jev_unknown_label_raises() -> None:
 
 def test_jev_malformed_body_raises() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"label": "high", "score": 42, "confidence": "high"})
+        body = _choice_response()
+        body["answers"]["decision"]["confidence"] = "very"
+        return httpx.Response(200, json=body)
 
     with pytest.raises(JevError):
         _client(httpx.MockTransport(handler)).decide(_request())
@@ -72,7 +128,7 @@ def test_jev_http_500_raises() -> None:
 def test_jev_timeout_raises() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         time.sleep(0.2)
-        return httpx.Response(200, json={"label": "high", "score": 0.9, "confidence": 0.9})
+        return httpx.Response(200, json=_choice_response())
 
     with pytest.raises(JevError):
         _client(httpx.MockTransport(handler), timeout_s=0.05).decide(_request())

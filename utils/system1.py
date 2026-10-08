@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Protocol
+from typing import Any, Protocol
 
 import httpx
 import numpy as np
@@ -19,6 +19,11 @@ from pydantic import BaseModel, Field
 from utils.config import settings
 
 logger = logging.getLogger(__name__)
+
+# The /systemone contract: one named question in, one answer out under the
+# same key. Everything S1 asks is a `choice` over the caller's options.
+DECISION_KEY = "decision"
+CHOICE_QUESTION = "Which option best applies to the state, judged by the `task`?"
 
 
 class S1Request(BaseModel):
@@ -77,16 +82,29 @@ class JevBackend:
         )
 
     def decide(self, request: S1Request) -> Decision:
+        """One decision via `POST /systemone` as a `choice` question.
+
+        Options become the choice criteria; the chosen option's probability is
+        the score, and Jev's derived confidence drives S1/S2 escalation.
+        """
+        instructions: dict[str, Any] = {"task": request.task, "question": CHOICE_QUESTION}
+        if request.profile_hint:
+            instructions["profile"] = request.profile_hint
+
         payload = {
             "model": self._model,
-            "task": request.task,
-            "context": request.context,
-            "options": request.options,
-            "profile_hint": request.profile_hint,
+            "state": request.context,
+            "questions": {
+                DECISION_KEY: {
+                    "type": "choice",
+                    "instructions": instructions,
+                    "criteria": {option: None for option in request.options},
+                }
+            },
         }
         started = time.monotonic()
         try:
-            response = self._client.post("/decisions", json=payload)
+            response = self._client.post("/systemone", json=payload)
             response.raise_for_status()
             body = response.json()
         except Exception as exc:
@@ -98,26 +116,38 @@ class JevBackend:
         if latency_ms > self._timeout_s * 1000:
             raise JevError(f"Jev deadline exceeded: {latency_ms}ms > {self._timeout_s}s")
 
-        label = body.get("label")
-        score = body.get("score")
-        confidence = body.get("confidence")
-        if (
-            not isinstance(label, str)
-            or label not in request.options
-            or not isinstance(score, (int, float))
-            or not isinstance(confidence, (int, float))
-            or not (0.0 <= float(score) <= 1.0)
-            or not (0.0 <= float(confidence) <= 1.0)
-        ):
-            raise JevError(f"Jev contract violation: {body!r}")
+        return _parse_choice_answer(body, request.options, latency_ms)
 
-        return Decision(
-            label=label,
-            score=float(score),
-            confidence=float(confidence),
-            backend="jev",
-            latency_ms=latency_ms,
-        )
+
+def _parse_choice_answer(body: Any, options: list[str], latency_ms: int) -> Decision:
+    """Validate a `/systemone` body and map its choice answer onto a Decision."""
+    answer = body.get("answers", {}).get(DECISION_KEY) if isinstance(body, dict) else None
+    if not isinstance(answer, dict) or answer.get("type") != "choice":
+        raise JevError(f"Jev contract violation: {body!r}")
+
+    label = answer.get("choice")
+    probabilities = answer.get("probabilities")
+    confidence = answer.get("confidence")
+    if (
+        not isinstance(label, str)
+        or label not in options
+        or not isinstance(probabilities, dict)
+        or not isinstance(confidence, (int, float))
+        or not (0.0 <= float(confidence) <= 1.0)
+    ):
+        raise JevError(f"Jev contract violation: {body!r}")
+
+    score = probabilities.get(label)
+    if not isinstance(score, (int, float)) or not (0.0 <= float(score) <= 1.0):
+        raise JevError(f"Jev contract violation: {body!r}")
+
+    return Decision(
+        label=label,
+        score=float(score),
+        confidence=float(confidence),
+        backend="jev",
+        latency_ms=latency_ms,
+    )
 
 
 # ── Local calibrated fallback ──────────────────────────────────────────

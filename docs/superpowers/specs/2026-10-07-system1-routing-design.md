@@ -67,7 +67,8 @@ Protocol + two backends:
 - **`JevBackend`** — thin HTTP adapter (httpx, 5s timeout, 1 retry). Endpoint,
   model name and payload shape come from settings; the adapter is isolated so
   the real early-access contract is a small fix if it differs from the assumed
-  `POST {base_url}/decisions` shape. API key from `.env` (`JEV_API_KEY`).
+  `POST {base_url}/systemone` shape (a `choice` question over the options;
+  the chosen option's probability is the score). API key from `.env` (`JEV_API_KEY`).
 - **`LocalCalibratedBackend`** — logistic regression over the existing MiniLM
   embeddings (numpy only — no new heavy deps), trained at startup on the
   `scores` table history (relevance ≥ 7 → positive, ≤ 4 → negative). Keeps
@@ -125,7 +126,7 @@ the run view and cost meter: task, backend, confidence, latency, escalated.
 S1_ENABLED=true
 JEV_API_KEY=            # empty → Jev skipped, local backend used
 JEV_BASE_URL=https://api.typesafe.ai/v1
-JEV_MODEL=jev-1
+JEV_MODEL=jev-latest
 S1_CONFIDENCE_THRESHOLD=0.75
 S1_ESCALATION_TIER=fast   # which chat tier deliberates
 ```
