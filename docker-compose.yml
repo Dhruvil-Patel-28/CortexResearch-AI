@@ -6,6 +6,11 @@ services:
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - DIGEST_EMAIL_TO=${DIGEST_EMAIL_TO:-}
       - ENABLE_GRAPH_RAG=${ENABLE_GRAPH_RAG:-false}
       - ENABLE_SUPERMEMORY=${ENABLE_SUPERMEMORY:-false}
       - SUPERMEMORY_URL=${SUPERMEMORY_URL:-}
@@ -32,6 +37,15 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - SCHEDULE_INTERVAL_MINUTES=${SCHEDULE_INTERVAL_MINUTES:-240}
       - DIGEST_HOUR=${DIGEST_HOUR:-8}
+      - DIGEST_MIN_SCORE=${DIGEST_MIN_SCORE:-6.0}
+      - DIGEST_MAX_ITEMS=${DIGEST_MAX_ITEMS:-12}
+      # The worker, not the API, is what delivers the daily digest.
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - DIGEST_EMAIL_TO=${DIGEST_EMAIL_TO:-}
       # The ranker routes its scoring decisions through System 1 as well.
       - S1_ENABLED=${S1_ENABLED:-true}
       - JEV_API_KEY=${JEV_API_KEY:-}

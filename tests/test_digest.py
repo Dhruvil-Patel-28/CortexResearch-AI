@@ -8,6 +8,7 @@ digest is built from them.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from typing import ClassVar, Self
 
 import pytest
 
@@ -209,3 +210,114 @@ def test_digest_api_contract(client):
 
     again = client.post("/digests/run").json()
     assert again["story_count"] == 0, "immediately re-running must not repeat stories"
+
+
+# ── Email delivery ────────────────────────────────────────────────────
+
+
+class _FakeSMTP:
+    """Records what would have been sent, instead of opening a socket."""
+
+    sent: ClassVar[dict] = {}
+
+    def __init__(self, host: str, port: int, timeout: float | None = None) -> None:
+        _FakeSMTP.sent.update(host=host, port=port, timeout=timeout)
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *exc: object) -> bool:
+        return False
+
+    def starttls(self, context: object | None = None) -> None:
+        _FakeSMTP.sent["tls"] = True
+
+    def login(self, user: str, password: str) -> None:
+        _FakeSMTP.sent["login"] = (user, password)
+
+    def send_message(self, message) -> None:
+        _FakeSMTP.sent["message"] = message
+
+
+@pytest.fixture()
+def smtp_env(monkeypatch):
+    """Configure SMTP settings + a fake SMTP class for one test."""
+    from watch import digest as digest_mod
+
+    _FakeSMTP.sent = {}
+    monkeypatch.setattr(digest_mod.smtplib, "SMTP", _FakeSMTP)
+    monkeypatch.setattr(settings, "smtp_host", "smtp.gmail.com")
+    monkeypatch.setattr(settings, "smtp_port", 587)
+    monkeypatch.setattr(settings, "smtp_user", "me@gmail.com")
+    monkeypatch.setattr(settings, "smtp_password", "app-password")
+    monkeypatch.setattr(settings, "digest_email_to", "me@gmail.com")
+    return _FakeSMTP.sent
+
+
+def test_digest_emails_both_html_and_plain_text(store_db, smtp_env):
+    _seed_item("e1", title="Emailed story", source="hackernews", score=8.5)
+
+    from watch.digest import build_digest
+
+    built = build_digest(persist=True)
+
+    assert "email" in built["delivered"], "a configured SMTP must add the email channel"
+    assert smtp_env["host"] == "smtp.gmail.com"
+    assert smtp_env["port"] == 587
+    assert smtp_env.get("tls") is True, "587 must upgrade with STARTTLS"
+    assert smtp_env["login"] == ("me@gmail.com", "app-password")
+
+    message = smtp_env["message"]
+    assert message["To"] == "me@gmail.com"
+    assert message["From"] == "me@gmail.com"
+    assert "digest" in message["Subject"].lower()
+
+    plain = message.get_body(preferencelist=("plain",)).get_content()
+    assert "Emailed story" in plain, "a no-HTML client still gets the markdown"
+
+    html = message.get_body(preferencelist=("html",)).get_content()
+    assert "Emailed story" in html
+    assert "<!doctype html>" in html.lower()
+    assert "https://example.com/e1" in html, "story links survive into the email"
+
+    stored = store.get_digest(built["id"])
+    assert "email" in stored["delivered"], "the channel is recorded for the UI"
+
+
+def test_email_escapes_html_and_splits_recipients(store_db, smtp_env, monkeypatch):
+    monkeypatch.setattr(settings, "digest_email_to", "me@gmail.com, other@example.com")
+    _seed_item("e2", title="RAG <script>alert(1)</script> & friends", source="rss", score=7.9)
+
+    from watch.digest import build_digest
+
+    built = build_digest(persist=True)
+
+    assert smtp_env["message"]["To"] == "me@gmail.com, other@example.com"
+    html = smtp_env["message"].get_body(preferencelist=("html",)).get_content()
+    assert "<script>alert(1)</script>" not in html, "titles are escaped, not injected"
+    assert "&lt;script&gt;" in html
+    assert "RAG <script>alert(1)</script> & friends" in built["markdown"], "markdown keeps the raw title"
+
+
+def test_email_failure_never_breaks_the_digest(store_db, monkeypatch):
+    from watch import digest as digest_mod
+
+    class BoomSMTP:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            raise OSError("no route to host")
+
+    monkeypatch.setattr(digest_mod.smtplib, "SMTP", BoomSMTP)
+    monkeypatch.setattr(settings, "smtp_host", "smtp.gmail.com")
+    monkeypatch.setattr(settings, "smtp_user", "me@gmail.com")
+    monkeypatch.setattr(settings, "smtp_password", "app-password")
+    monkeypatch.setattr(settings, "digest_email_to", "me@gmail.com")
+
+    _seed_item("e3", title="Survives a dead SMTP", source="hackernews", score=8.0)
+
+    from watch.digest import build_digest
+
+    built = build_digest(persist=True)
+
+    assert built["delivered"] == ["file"], "delivery failure must not claim success"
+    assert "Survives a dead SMTP" in built["markdown"]
+    assert store.get_digest(built["id"]) is not None, "the digest is still persisted"

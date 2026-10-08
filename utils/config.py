@@ -100,6 +100,12 @@ class Settings(BaseSettings):
     digest_max_items: int = Field(default=12, description="Max stories in one digest")
     digest_dir: str = Field(default="data/digests", description="Directory where digest markdown files are written")
     slack_webhook_url: str = Field(default="", description="Optional Slack webhook for digest delivery")
+    # Email delivery — off until host, user, password and a recipient are all set.
+    smtp_host: str = Field(default="", description="SMTP host, e.g. smtp.gmail.com; empty disables email delivery")
+    smtp_port: int = Field(default=587, description="SMTP port: 587 upgrades with STARTTLS, 465 is implicit SSL")
+    smtp_user: str = Field(default="", description="SMTP username (for Gmail, your full address)")
+    smtp_password: str = Field(default="", description="SMTP password (for Gmail, a 16-char App Password)")
+    digest_email_to: str = Field(default="", description="Comma-separated digest recipients")
 
 
 # Global settings instance — validates env vars on import

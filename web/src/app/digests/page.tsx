@@ -11,11 +11,18 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarClock, ChevronRight, Loader2, Mail, Plus, Radio } from "lucide-react";
+import { CalendarClock, ChevronRight, FileText, Loader2, Mail, MessageSquare, Plus, Radio } from "lucide-react";
 import { digestsApi } from "@/lib/api";
 import { useAsync } from "@/lib/hooks";
 import type { DigestDetail } from "@/lib/types";
 import { relativeTime } from "@/lib/utils";
+
+/** Delivery channels a digest can report, with the icon shown next to each. */
+const CHANNEL_ICONS: Record<string, typeof FileText> = {
+  file: FileText,
+  email: Mail,
+  slack: MessageSquare,
+};
 
 /** Render the controlled digest markdown subset. Escapes HTML first. */
 function DigestMarkdown({ markdown }: { markdown: string }) {
@@ -236,15 +243,18 @@ export default function DigestsPage() {
                   <span className="text-[11px] text-ink-faint">
                     {digest.story_count} stories
                   </span>
-                  {digest.delivered.map((channel) => (
-                    <span
-                      key={channel}
-                      className="inline-flex items-center gap-1 rounded-full border border-line bg-surface-2 px-2 py-0.5 text-[10px] text-ink-faint"
-                    >
-                      {channel === "file" ? <Mail className="size-2.5" /> : null}
-                      {channel}
-                    </span>
-                  ))}
+                  {digest.delivered.map((channel) => {
+                    const Icon = CHANNEL_ICONS[channel];
+                    return (
+                      <span
+                        key={channel}
+                        className="inline-flex items-center gap-1 rounded-full border border-line bg-surface-2 px-2 py-0.5 text-[10px] text-ink-faint"
+                      >
+                        {Icon ? <Icon className="size-2.5" /> : null}
+                        {channel}
+                      </span>
+                    );
+                  })}
                 </span>
                 <span className="mt-1 line-clamp-2 block text-xs leading-relaxed text-ink-faint">
                   {digest.preview.replace(/[#>*\n]/g, " ").trim()}

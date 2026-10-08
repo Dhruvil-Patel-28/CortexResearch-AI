@@ -25,7 +25,9 @@ agent timeline in the browser and a searchable library of everything you've ever
    stories (the intelligence was spent at ranking time), a "what changed since last
    digest" delta section computed from data (re-heated clusters = stories that came back
    with new sources or higher relevance), and one-click **delta briefs**: a full research
-   run anchored on "what changed in X since [date]".
+   run anchored on "what changed in X since [date]". Delivery is layered: the Markdown
+   always lands in `data/digests/`, and the same digest goes out as an HTML + plain-text
+   email and/or a Slack message when those are configured.
 4. **Library** (`/library`) — hybrid search (BM25 + embeddings + cross-encoder rerank)
    over every ingested source and every published report, with optional GraphRAG for
    multi-hop "how do X and Y connect" questions.
@@ -54,7 +56,7 @@ Ranker: cheap prefilter → LLM score (structured output) → score cache
 Next.js 16 UI (App Router, Tailwind v4): Pulse · Research · Live run view ·
 Report reader (TOC, citation chips, confidence badges) · Digests · Library
         │
-Scheduler worker (APScheduler): ingest+score cycle → daily digest → delivery (file/Slack)
+Scheduler worker (APScheduler): ingest+score cycle → daily digest → delivery (file/email/Slack)
 ```
 
 **Everywhere, degradation is designed in:** retrieval works if embeddings fail, reports
@@ -147,6 +149,12 @@ Optional: run the scheduler worker for automatic ingest cycles and the daily dig
 ./venv/bin/python -m watch.scheduler
 ```
 
+Email delivery is opt-in — set `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD` and
+`DIGEST_EMAIL_TO` in `.env` (with Gmail, use a 16-character
+[App Password](https://myaccount.google.com/apppasswords), not your login password).
+Port 587 upgrades with STARTTLS; port 465 uses implicit SSL. A send failure is logged
+and never blocks the digest — the file is still written.
+
 Optional: expose the app to MCP clients (Claude Desktop, Cursor, …):
 
 ```bash
@@ -176,5 +184,5 @@ tests/          offline fixture-based test suite
 
 ## Status
 
-Actively developed. Roadmap: trends/momentum view, command palette, email delivery,
+Actively developed. Roadmap: trends/momentum view, command palette,
 NotebookLM-style audio briefings.

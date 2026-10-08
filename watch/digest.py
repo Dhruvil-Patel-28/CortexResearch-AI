@@ -18,7 +18,10 @@ from __future__ import annotations
 
 import json
 import logging
+import smtplib
 from datetime import datetime, timedelta, timezone
+from email.message import EmailMessage
+from html import escape
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +32,9 @@ logger = logging.getLogger(__name__)
 # A cluster counts as "re-heated" when it gained sources or relevance since the
 # previous digest covered it.
 REHEAT_SOURCE_GAIN = 1
+
+# SMTP is best-effort delivery: never let a slow mail server hold the worker.
+SMTP_TIMEOUT_S = 20.0
 
 
 def _split_sources(value: Any) -> set[str]:
@@ -202,9 +208,147 @@ def render_digest_md(
     return "\n".join(lines)
 
 
-def deliver(markdown: str, digest_id: str) -> list[str]:
+def render_digest_html(
+    items: list[dict[str, Any]],
+    *,
+    since: str,
+    delta: dict[str, Any],
+    profile_name: str = "there",
+) -> str:
+    """Render the digest as inline-styled HTML for email clients.
+
+    Same content as the Markdown, restated in the one form every mail client
+    can render: one column, inline styles, no external assets. Every piece of
+    feed-supplied text is escaped — story titles are third-party input.
     """
-    Deliver a digest. Local file always; Slack when a webhook is configured.
+    now = datetime.now(timezone.utc)
+    muted = 'style="margin:8px 0 0;color:#4b5563;font-size:14px;line-height:1.6"'
+    parts: list[str] = [
+        "<!doctype html>",
+        (
+            '<html><body style="margin:0;padding:24px;background:#f4f5f7;'
+            "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;"
+            'color:#111827">'
+        ),
+        (
+            '<div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;'
+            'border-radius:12px;padding:28px">'
+        ),
+        (
+            '<p style="margin:0 0 6px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;'
+            'color:#6b7280">CortexResearch · daily digest</p>'
+        ),
+        f'<h1 style="margin:0 0 6px;font-size:22px;line-height:1.3">Market pulse — {now.strftime("%A, %d %B %Y")}</h1>',
+        (
+            '<p style="margin:0;color:#4b5563;font-size:14px">'
+            f"Top {len(items)} stories since {escape(since[:10])}, ranked for {escape(profile_name)}.</p>"
+        ),
+    ]
+
+    if delta.get("reheated"):
+        parts.append('<h2 style="margin:28px 0 6px;font-size:15px">What changed since the last digest</h2>')
+        parts.append('<ul style="margin:0;padding-left:18px;color:#374151;font-size:14px;line-height:1.7">')
+        for entry in delta["reheated"]:
+            bits = []
+            if entry.get("gained_sources"):
+                bits.append(f"+{entry['gained_sources']} new source(s)")
+            if entry.get("score_gain"):
+                bits.append(f"relevance {entry['score_gain']:+.1f}")
+            suffix = f" ({escape(', '.join(bits))})" if bits else ""
+            title = escape(entry["title"])
+            if entry.get("url"):
+                title = f'<a href="{escape(entry["url"], quote=True)}" style="color:#4f46e5">{title}</a>'
+            parts.append(f"<li><strong>Back with more:</strong> {title}{suffix}</li>")
+        parts.append("</ul>")
+
+    if not items:
+        parts.append('<h2 style="margin:28px 0 6px;font-size:15px">Nothing new cleared the bar</h2>')
+        parts.append(
+            f"<p {muted}>No stories scored above the relevance threshold since the last digest. "
+            "That is a valid result — the next ingest cycle may change it.</p>"
+        )
+    else:
+        parts.append('<h2 style="margin:28px 0 6px;font-size:15px">The stories</h2>')
+        for rank, item in enumerate(items, 1):
+            title = escape(item["title"])
+            if item.get("url"):
+                title = (
+                    f'<a href="{escape(item["url"], quote=True)}" '
+                    f'style="color:#111827;text-decoration:none">{title}</a>'
+                )
+            meta = [f"relevance {item['relevance']:.1f}/10"]
+            if item.get("cluster_size") and item["cluster_size"] > 1:
+                meta.append(f"{item['cluster_size']} sources")
+            parts.append(f'<h3 style="margin:20px 0 2px;font-size:16px;line-height:1.4">{rank}. {title}</h3>')
+            parts.append(f'<p style="margin:0;color:#6b7280;font-size:12px">{escape(", ".join(meta))}</p>')
+            if item.get("rationale"):
+                parts.append(
+                    f'<p style="margin:8px 0 0;color:#374151;font-size:14px;line-height:1.6">'
+                    f"{escape(item['rationale'])}</p>"
+                )
+            if item.get("raw_text"):
+                snippet = escape(" ".join(item["raw_text"].split())[:280])
+                parts.append(
+                    '<blockquote style="margin:8px 0 0;padding:8px 12px;border-left:3px solid #e5e7eb;'
+                    f'color:#6b7280;font-size:13px;line-height:1.6">{snippet}…</blockquote>'
+                )
+
+    parts += [
+        '<hr style="margin:24px 0 12px;border:none;border-top:1px solid #e5e7eb">',
+        (
+            '<p style="margin:0;color:#9ca3af;font-size:12px">Generated by CortexResearch · '
+            f"{now.strftime('%Y-%m-%d %H:%M UTC')} · {delta.get('new_clusters', 0)} new stories, "
+            f"{delta.get('previously_covered', 0)} updates to covered ones</p>"
+        ),
+        "</div></body></html>",
+    ]
+    return "\n".join(parts)
+
+
+def _email_recipients() -> list[str]:
+    """Configured recipients, tolerating "a@x.com, b@y.com" formatting."""
+    from utils.config import settings
+
+    return [addr.strip() for addr in settings.digest_email_to.split(",") if addr.strip()]
+
+
+def _email_configured() -> bool:
+    from utils.config import settings
+
+    return bool(
+        settings.smtp_host
+        and settings.smtp_user
+        and settings.smtp_password
+        and _email_recipients()
+    )
+
+
+def _send_email(markdown: str, html_body: str) -> None:
+    """Send one digest over SMTP. Raises on failure; the caller decides."""
+    from utils.config import settings
+
+    message = EmailMessage()
+    message["Subject"] = f"Market pulse digest — {datetime.now(timezone.utc).strftime('%a, %d %b %Y')}"
+    message["From"] = settings.smtp_user
+    message["To"] = ", ".join(_email_recipients())
+    message.set_content(markdown)
+    if html_body:
+        message.add_alternative(html_body, subtype="html")
+
+    if settings.smtp_port == 465:  # implicit TLS
+        with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port, timeout=SMTP_TIMEOUT_S) as smtp:
+            smtp.login(settings.smtp_user, settings.smtp_password)
+            smtp.send_message(message)
+    else:  # 587 and friends upgrade with STARTTLS
+        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=SMTP_TIMEOUT_S) as smtp:
+            smtp.starttls()
+            smtp.login(settings.smtp_user, settings.smtp_password)
+            smtp.send_message(message)
+
+
+def deliver(markdown: str, digest_id: str, *, html_body: str = "") -> list[str]:
+    """
+    Deliver a digest. Local file always; Slack and email when configured.
 
     Returns the list of channels actually delivered to (recorded in the DB).
     """
@@ -237,6 +381,14 @@ def deliver(markdown: str, digest_id: str) -> list[str]:
                 logger.warning("Slack delivery returned HTTP %s", response.status_code)
         except Exception as e:  # noqa: BLE001 — delivery must never fail the digest
             logger.warning("Slack delivery failed: %s", e)
+
+    if _email_configured():
+        try:
+            _send_email(markdown, html_body)
+            delivered.append("email")
+            logger.info("Digest emailed to %s", ", ".join(_email_recipients()))
+        except Exception as e:  # noqa: BLE001 — delivery must never fail the digest
+            logger.warning("Email delivery failed: %s", e)
     return delivered
 
 
@@ -272,6 +424,7 @@ def build_digest(
         profile_name = "you"
 
     markdown = render_digest_md(items, since=since, delta=delta, profile_name=profile_name)
+    html_body = render_digest_html(items, since=since, delta=delta, profile_name=profile_name)
 
     result: dict[str, Any] = {
         "id": "",
@@ -288,7 +441,7 @@ def build_digest(
         rendered_md=markdown,
         item_ids=[i["id"] for i in items],
     )
-    delivered = deliver(markdown, digest_id)
+    delivered = deliver(markdown, digest_id, html_body=html_body)
     with db.connect() as con, con:
         con.execute(
             "UPDATE digests SET delivered_json = ? WHERE id = ?",
