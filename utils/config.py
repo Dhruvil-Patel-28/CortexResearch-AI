@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     # Optional retrieval/memory upgrades — all degrade gracefully when off.
     enable_graph_rag: bool = Field(default=False, description="Enable LightRAG knowledge-graph retrieval (requires lightrag-hku)")
     graph_working_dir: str = Field(default="data/graphrag", description="LightRAG storage directory")
+    graph_llm_tier: str = Field(default="fast", description="LLM tier for GraphRAG entity extraction and answers")
     enable_supermemory: bool = Field(default=False, description="Enable the local Supermemory memory service")
     supermemory_url: str = Field(default="", description="Base URL of the local Supermemory service")
     supermemory_api_key: str = Field(default="", description="Optional API key for Supermemory")

@@ -177,22 +177,7 @@ class Retriever:
     # ── component loading ────────────────────────────────────────────
 
     def _get_embedder(self) -> EmbedFn | None:
-        if self._dense_failed:
-            return None
-        if self._embedder is None:
-            try:
-                from sentence_transformers import SentenceTransformer
-
-                model = SentenceTransformer(settings.embedding_model)
-                self._embedder = lambda texts: model.encode(
-                    texts, normalize_embeddings=True, show_progress_bar=False
-                )
-                logger.info("Embedding model loaded: %s", settings.embedding_model)
-            except Exception as e:  # noqa: BLE001 — offline / missing model
-                logger.warning("Dense retrieval disabled (embedder unavailable): %s", e)
-                self._dense_failed = True
-                return None
-        return self._embedder
+        return get_embedder()
 
     def _get_reranker(self) -> RerankFn | None:
         if self._reranker is None and not settings.rag_rerank:
@@ -229,6 +214,14 @@ class Retriever:
         self._build_dense(docs)
         db.set_meta("rag_fingerprint", fp)
         logger.info("Retrieval index rebuilt: %d documents", len(docs))
+
+        # Fan new docs out to the knowledge graph (no-op when disabled).
+        try:
+            from rag import graph
+
+            graph.index_docs(docs)
+        except Exception as e:  # noqa: BLE001 — the graph must never break retrieval
+            logger.warning("GraphRAG index hook failed: %s", e)
         return True
 
     def _build_fts(self, docs: list[Doc]) -> None:
@@ -404,6 +397,36 @@ class Retriever:
 # ── module-level singleton ───────────────────────────────────────────
 
 _retriever: Retriever | None = None
+
+# Shared embedder — used by the dense retrieval leg AND GraphRAG's embedding
+# function, so both search legs always agree on the vector space.
+_shared_embedder: EmbedFn | None = None
+_embedder_failed = False
+
+
+def get_embedder() -> EmbedFn | None:
+    """The shared MiniLM embedder (None when unavailable)."""
+    global _shared_embedder, _embedder_failed
+    if _embedder_failed:
+        return None
+    if _shared_embedder is None:
+        try:
+            from sentence_transformers import SentenceTransformer
+
+            model = SentenceTransformer(settings.embedding_model)
+
+            def _shared_embedder_fn(texts):
+                return model.encode(
+                    texts, normalize_embeddings=True, show_progress_bar=False
+                )
+
+            _shared_embedder = _shared_embedder_fn
+            logger.info("Embedding model loaded: %s", settings.embedding_model)
+        except Exception as e:  # noqa: BLE001 — offline / missing model
+            logger.warning("Dense retrieval disabled (embedder unavailable): %s", e)
+            _embedder_failed = True
+            return None
+    return _shared_embedder
 
 
 def get_retriever() -> Retriever:
