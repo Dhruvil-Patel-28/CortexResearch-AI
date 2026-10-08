@@ -8,6 +8,8 @@ Six free sources in, a ranked and personalized radar out. Click anything and a m
 pipeline researches it, verifies every claim against its citations, and writes a report
 detailed enough that you don't have to follow up.
 
+Built by [Dhruvil Patel](https://github.com/Dhruvil-Patel-28).
+
 [![CI](https://github.com/Dhruvil-Patel-28/CortexResearch-AI/actions/workflows/ci.yml/badge.svg)](https://github.com/Dhruvil-Patel-28/CortexResearch-AI/actions/workflows/ci.yml)
 ![tests](https://img.shields.io/badge/tests-246%20passing-3fb950)
 ![python](https://img.shields.io/badge/python-3.12%2B-3776AB?logo=python&logoColor=white)
