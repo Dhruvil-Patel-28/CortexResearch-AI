@@ -23,26 +23,53 @@ def _enable(monkeypatch):
     monkeypatch.setattr(settings, "langfuse_host", "http://localhost:3000")
 
 
-class FakeLangfuse:
-    def __init__(self, **kwargs):
-        FakeLangfuse.last_init = kwargs
-        self.traces = []
+class FakeChildObservation:
+    """A child generation observation; just records and ends."""
+
+    def __init__(self, parent, **kwargs):
+        self.parent = parent
+        self.kwargs = kwargs
+
+    def end(self):
+        self.parent.generations.append(self.kwargs)
+
+
+class FakeRootObservation:
+    """The root observation (= the trace in the v4 SDK)."""
+
+    def __init__(self, client, **kwargs):
+        self.client = client
+        self.meta = kwargs
         self.generations = []
         self.events = []
         self.scores = []
+        self.ended = False
+        client.roots.append(self)
 
-    def trace(self, **kwargs):
-        self.traces.append(kwargs)
-        return self
+    def start_observation(self, **kwargs):
+        return FakeChildObservation(self, **kwargs)
 
-    def generation(self, **kwargs):
-        self.generations.append(kwargs)
-
-    def event(self, **kwargs):
+    def create_event(self, **kwargs):
         self.events.append(kwargs)
 
-    def score(self, **kwargs):
+    def score_trace(self, **kwargs):
         self.scores.append(kwargs)
+
+    def end(self):
+        self.ended = True
+
+
+class FakeLangfuse:
+    def __init__(self, **kwargs):
+        FakeLangfuse.last_init = kwargs
+        self.roots = []
+        self.flushed = False
+
+    def start_observation(self, **kwargs):
+        return FakeRootObservation(self, **kwargs)
+
+    def flush(self):
+        self.flushed = True
 
 
 def test_disabled_without_keys(monkeypatch):
@@ -78,12 +105,13 @@ def test_records_generations_events_scores(monkeypatch):
     trace.score("verification", 1.0, "3/3 supported")
     trace.finish("ok")
 
-    assert fake.traces and fake.traces[0]["name"] == "research-run"
-    assert fake.traces[0]["input"] == "test query"
-    assert len(fake.generations) == 1
-    assert fake.generations[0]["model"] == "m1"
-    assert fake.events[0]["name"] == "route"
-    assert fake.scores[0]["name"] == "verification"
+    assert fake.roots and fake.roots[0].meta["name"] == "research-run"
+    assert fake.roots[0].meta["input"] == "test query"
+    assert len(fake.roots[0].generations) == 1
+    assert fake.roots[0].generations[0]["model"] == "m1"
+    assert fake.roots[0].events[0]["name"] == "route"
+    assert fake.roots[0].scores[0]["name"] == "verification"
+    assert fake.roots[0].ended and fake.flushed
 
 
 def test_langfuse_failure_swallowed(monkeypatch):
@@ -134,5 +162,5 @@ def test_llm_client_records_generation(monkeypatch):
         client.invoke("say hi")
 
     # generation recorded through the trace wrapper
-    assert len(fake.generations) == 1
-    assert fake.generations[0]["model"] == "fake-model"
+    assert len(fake.roots[0].generations) == 1
+    assert fake.roots[0].generations[0]["model"] == "fake-model"

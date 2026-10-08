@@ -62,11 +62,16 @@ def _get_client():
 
 
 class RunTrace:
-    """One research run in Langfuse. All methods are no-op-safe."""
+    """One research run in Langfuse. All methods are no-op-safe.
 
-    def __init__(self, enabled: bool, trace=None) -> None:
+    Built on the v4 OTel-based SDK: the root observation opened by
+    `start_observation` becomes the trace; generations/events/scores hang
+    off it. `finish()` ends the root observation and flushes.
+    """
+
+    def __init__(self, enabled: bool, span=None) -> None:
         self.enabled = enabled
-        self._trace = trace
+        self._span = span
 
     @classmethod
     def start(cls, query: str, depth: str, job_id: str = "") -> "RunTrace":
@@ -75,11 +80,12 @@ class RunTrace:
             client = _get_client()
             if client is None:
                 return cls(False)
-            return cls(True, client.trace(
+            span = client.start_observation(
                 name="research-run",
                 input=query,
                 metadata={"depth": depth, "job_id": job_id},
-            ))
+            )
+            return cls(True, span)
         except Exception as exc:  # noqa: BLE001
             logger.debug("RunTrace.start failed: %s", exc)
             return cls(False)
@@ -89,12 +95,14 @@ class RunTrace:
         if not self.enabled:
             return
         try:
-            self._trace.generation(
+            obs = self._span.start_observation(
                 name=label,
+                as_type="generation",
                 model=model,
-                usage={"input": input_tokens, "output": output_tokens},
+                usage_details={"input": input_tokens, "output": output_tokens},
                 metadata={"latency_ms": round(latency_ms, 1)},
             )
+            obs.end()
         except Exception as exc:  # noqa: BLE001
             logger.debug("trace.generation failed: %s", exc)
 
@@ -102,7 +110,7 @@ class RunTrace:
         if not self.enabled:
             return
         try:
-            self._trace.event(name=name, metadata=payload or {})
+            self._span.create_event(name=name, metadata=payload or {})
         except Exception as exc:  # noqa: BLE001
             logger.debug("trace.event failed: %s", exc)
 
@@ -110,12 +118,21 @@ class RunTrace:
         if not self.enabled:
             return
         try:
-            self._trace.score(name=name, value=value, comment=comment)
+            self._span.score_trace(name=name, value=value, comment=comment)
         except Exception as exc:  # noqa: BLE001
             logger.debug("trace.score failed: %s", exc)
 
     def finish(self, status: str) -> None:
         self.event("run_completed", {"status": status})
+        if not self.enabled:
+            return
+        try:
+            self._span.end()
+            client = _get_client()
+            if client:
+                client.flush()
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("trace.finish failed: %s", exc)
 
 
 @contextlib.contextmanager
