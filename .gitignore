@@ -192,3 +192,6 @@ data/evals/
 
 # Local user infrastructure (self-hosted Langfuse etc.) — never commit
 local/
+
+# Verdent agent tool state (skills are tracked under .agents/skills/)
+.verdent/
