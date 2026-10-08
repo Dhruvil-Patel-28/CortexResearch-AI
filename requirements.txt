@@ -10,6 +10,9 @@ langchain-anthropic>=0.3.0
 langgraph>=0.2.0
 langfuse>=3.0.0  # optional observability; app runs fine without it
 
+# --- MCP Server (optional; expose the app to MCP clients like Claude Desktop) ---
+mcp>=1.2.0,<2.0.0  # v2 renamed FastMCP to MCPServer; server.py uses the v1 API
+
 # --- Embeddings & Retrieval ---
 sentence-transformers>=2.2.0
 
