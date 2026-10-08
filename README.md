@@ -85,6 +85,20 @@ feature flags the app never hard-depends on.
   (`python -m evals.runner`). Every research run traces into Langfuse
   (generations, S1/guardrail events, verification score) when keys are
   configured — and runs identically without it.
+- **Cross-session memory (Supermemory, optional)** — published reports, bookmarks,
+  searches and digests are remembered to a self-hosted Supermemory instance
+  (`ENABLE_SUPERMEMORY`); before each research run, relevant memories are recalled
+  and injected with trusted-but-labeled framing ("from your personal memory store").
+  Fully no-op when the flag is off.
+- **GraphRAG over your corpus (optional)** — when `ENABLE_GRAPH_RAG` is on, ingested
+  items and published reports are incrementally indexed into a LightRAG
+  knowledge graph (idempotent, tracked via store metadata), and `/library/search`
+  gains a graph-synthesized answer for multi-hop "how do X and Y connect" questions
+  alongside the ranked hybrid hits.
+- **MCP server** — the whole app is exposed to MCP clients (Claude Desktop, etc.)
+  over stdio: 7 tools (search the library, browse items/reports, start and poll
+  research runs). The tool core is SDK-free pure functions; FastMCP is a thin
+  wrapper, so the entire surface is unit-testable offline.
 - **Claim-level verification** — the verifier checks every claim's citations
   deterministically first (missing/unknown source id → unsupported, no LLM call), then routes
   the remaining claims through S1, grouping low-confidence ones into a single
@@ -99,9 +113,11 @@ feature flags the app never hard-depends on.
   and reconnection; no fake progress bars.
 - **Cost metering** — per-run token/cost tracking with tiered model routing (fast tier
   for scoring/extraction, frontier tier for synthesis), surfaced on every report.
-- **Offline test suite** — 123 tests, all fixture-based: adapters, dedup, ranker caching,
+- **Offline test suite** — 241 tests, all fixture-based: adapters, dedup, ranker caching,
   digest boundaries, scheduler cycles, report schema, API contracts, retrieval legs,
-  S1 routing (mocked Jev transport, escalation, circuit breaker).
+  S1 routing (mocked Jev transport, escalation, circuit breaker), memory hooks,
+  GraphRAG indexing, guardrail/judge evals, and the MCP tool core + server
+  registration (fake SDK).
   No test ever hits a live API or downloads a model.
 
 ## Quickstart
@@ -131,6 +147,13 @@ Optional: run the scheduler worker for automatic ingest cycles and the daily dig
 ./venv/bin/python -m watch.scheduler
 ```
 
+Optional: expose the app to MCP clients (Claude Desktop, Cursor, …):
+
+```bash
+./venv/bin/pip install "mcp>=1.2.0,<2"
+./venv/bin/python -m mcp_server.server   # stdio; add to your client's mcpServers config
+```
+
 Configuration is env-driven (models, schedule, digest thresholds, source knobs) — see
 `.env.example`. Interests live in a profile (keywords, stack, goals, boosts, mutes),
 editable at `/topics`.
@@ -142,12 +165,13 @@ sources/        feed adapters (HN, arXiv, RSS, Reddit, GitHub, Product Hunt) + b
 store/          SQLite persistence: items, scores, briefs, digests, jobs, settings
 watch/          profile, ranker, dedup/clustering, digest builder, scheduler
 rag/            hybrid retriever (BM25 + dense + rerank) + optional GraphRAG adapter
-memory/         optional Supermemory client (flagged, graceful fallback)
+memory/         optional Supermemory client + write hooks + research recall (flagged)
 agents/         planner / researcher / writer / verifier / reviser pipeline + jobs
 schemas/        report schema v2 (alias remapping + per-entry salvage)
 api/            FastAPI routes: /watch, /research (+SSE), /digests, /search, /health
+mcp_server/     stdio MCP server: 7 tools over store/retriever/jobs (SDK-free core)
 web/            Next.js 16 frontend (App Router, Tailwind v4)
-tests/          82 offline tests over fixtures
+tests/          offline fixture-based test suite
 ```
 
 ## Status

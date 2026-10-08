@@ -1,7 +1,7 @@
 # Phases 4–6 — Supermemory Enablement, GraphRAG Enablement, MCP Server — Design Spec
 
 Date: 2026-10-08
-Status: Draft for review
+Status: Implemented (P4 commit 47fecf3, P5 commit a7a1796, P6 commit dd2bd24)
 Project: CortexResearch-AI
 
 ## 1. Goal
