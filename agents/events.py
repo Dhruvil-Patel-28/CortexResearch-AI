@@ -33,6 +33,20 @@ def emit_event(state: dict[str, Any], event_type: str, **payload: Any) -> None:
     except Exception as exc:  # never let telemetry break a run
         logger.debug("event emit failed: %s", exc)
 
+    # Mirror scalar event fields into the active Langfuse trace, if any.
+    try:
+        from utils import tracing
+
+        trace = tracing.current_trace()
+        if trace is not None and trace.enabled:
+            scalars = {
+                k: v for k, v in payload.items()
+                if isinstance(v, (str, int, float, bool)) or v is None
+            }
+            trace.event(event_type, scalars)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("trace event mirror failed: %s", exc)
+
 
 def step_event(agent: str, action: str, **extra: Any) -> dict[str, Any]:
     """Canonical agent-step event body (also used for the persisted trace)."""

@@ -78,6 +78,13 @@ feature flags the app never hard-depends on.
   "data, not instructions" directive, model responses are checked on every LLM call,
   and user queries are screened before a run starts. What was caught is visible live
   in the run view and in the report trace.
+- **Eval harness with Langfuse observability** — a threshold-gated guardrail eval
+  (precision/recall over a deliberate attack corpus; CI fails on regression), an
+  LLM-as-judge suite scoring reports on a 4-dimension rubric (groundedness
+  weighted 2×) with deterministic facts computed in code, and a CLI runner
+  (`python -m evals.runner`). Every research run traces into Langfuse
+  (generations, S1/guardrail events, verification score) when keys are
+  configured — and runs identically without it.
 - **Claim-level verification** — the verifier checks every claim's citations
   deterministically first (missing/unknown source id → unsupported, no LLM call), then routes
   the remaining claims through S1, grouping low-confidence ones into a single

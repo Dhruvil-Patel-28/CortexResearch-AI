@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from evals import runner
-from evals.results import JudgeResult, JudgeDimension
+from evals.results import JudgeResult
 
 
 @pytest.fixture(autouse=True)

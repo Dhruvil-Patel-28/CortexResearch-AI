@@ -188,3 +188,4 @@ watch/feeds.local.yaml
 data/digests/
 data/rag/
 .superpowers/
+data/evals/

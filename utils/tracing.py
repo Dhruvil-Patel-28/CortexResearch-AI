@@ -17,7 +17,6 @@ import contextlib
 import contextvars
 import logging
 import threading
-import time
 
 from utils.config import settings
 

@@ -39,6 +39,26 @@ def _load_report(report_id: str | None) -> dict:
     return stored.get("report_json") or {}
 
 
+def _export_to_langfuse(suite: str, result) -> None:
+    """Push eval scores to Langfuse on a dedicated eval trace (no-op when unconfigured)."""
+    try:
+        from utils import tracing
+
+        trace = tracing.RunTrace.start(f"eval:{suite}", "eval")
+        if not trace.enabled:
+            return
+        if suite == "guardrails":
+            trace.score("guardrail_precision", result.precision)
+            trace.score("guardrail_recall", result.recall)
+        else:
+            for dim in result.dimensions:
+                trace.score(f"judge_{dim.name}", dim.score, dim.rationale)
+            trace.score("judge_weighted", result.weighted_score)
+        trace.finish("ok")
+    except Exception:  # noqa: BLE001 — export must never fail the runner
+        pass
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="evals.runner", description="CortexResearch eval harness")
     parser.add_argument("--suite", choices=["guardrails", "judge", "all"], default="all")
@@ -64,6 +84,7 @@ def main(argv: list[str] | None = None) -> int:
         if not args.no_save:
             path = results.save(result, "guardrails")
             print(f"saved → {path}")
+        _export_to_langfuse("guardrails", result)
 
     if args.suite in ("judge", "all"):
         report = _load_report(args.report_id)
@@ -72,6 +93,7 @@ def main(argv: list[str] | None = None) -> int:
         if not args.no_save:
             path = results.save(judged, "judge")
             print(f"saved → {path}")
+        _export_to_langfuse("judge", judged)
 
     return exit_code
 

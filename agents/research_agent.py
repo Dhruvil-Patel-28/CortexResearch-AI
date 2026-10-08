@@ -31,6 +31,7 @@ from utils.memory import session_manager
 from utils.system1 import DecisionLog, get_router
 
 from guardrails import trace as guardrail_trace
+from utils import tracing
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +103,14 @@ def run_research(
     started = time.time()
     gr_start = guardrail_trace.snapshot()
 
+    with tracing.active_trace(query, depth, job_id=session_id) as run_trace:
+        return _run_pipeline(
+            query=query, depth=depth, session_id=session_id, item_id=item_id,
+            emit=emit, run_trace=run_trace, meter=meter, started=started, gr_start=gr_start,
+        )
+
+
+def _run_pipeline(*, query, depth, session_id, item_id, emit, run_trace, meter, started, gr_start):
     logger.info("Research v2 starting | depth=%s | session=%s | query=%s", depth, session_id, query[:120])
     if emit:
         emit("run_started", {"type": "run_started", "query": query, "depth": depth, "item_id": item_id})
@@ -144,6 +153,8 @@ def run_research(
         report.model_trace = guardrail_trace.attach_guardrail_trace(
             attach_decision_trace(meter.trace(), get_router().log), gr_start
         )
+        if run_trace.enabled:
+            run_trace.finish("error")
         return {
             "session_id": session_id,
             "report": report.model_dump(),
@@ -205,6 +216,15 @@ def run_research(
         verification.get("checked", 0),
         report.cost_usd,
     )
+
+    # Langfuse: verification score + run completion on the active trace.
+    if run_trace.enabled:
+        checked = verification.get("checked", 0)
+        supported = verification.get("supported", 0)
+        if checked:
+            run_trace.score("verification", round(supported / checked, 3), f"{supported}/{checked} claims supported")
+        run_trace.score("cost_usd", round(report.cost_usd, 4))
+        run_trace.finish("ok")
     return result
 
 
