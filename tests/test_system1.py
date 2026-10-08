@@ -2,8 +2,10 @@
 
 import json
 import time
+import zlib
 
 import httpx
+import numpy as np
 import pytest
 
 from utils.system1 import (
@@ -16,6 +18,33 @@ from utils.system1 import (
     S1Request,
     S1S2Router,
 )
+
+
+def _model_free_embed(texts: list[str]) -> np.ndarray:
+    """Deterministic hashed bag-of-words standing in for MiniLM.
+
+    The real ``utils.system1._embed`` builds a ``SentenceTransformer``, which
+    downloads ~90MB from HuggingFace on a cold cache — and CI is deliberately
+    offline with an empty cache. These tests cover the fit/decide mechanics,
+    not embedding quality, so a stable hash embedding keeps them hermetic
+    without loosening a single threshold.
+    """
+    dim = 256
+    out = np.zeros((len(texts), dim), dtype=np.float64)
+    for row, text in enumerate(texts):
+        for word in text.split():
+            out[row, zlib.crc32(word.encode()) % dim] += 1.0
+    norms = np.linalg.norm(out, axis=1, keepdims=True)
+    norms[norms == 0] = 1.0
+    return out / norms
+
+
+@pytest.fixture(autouse=True)
+def _never_load_the_real_embedder(monkeypatch):
+    """Keep every test in this module model-free (see ``_model_free_embed``)."""
+    from utils import system1
+
+    monkeypatch.setattr(system1, "_embed", _model_free_embed)
 
 
 def _client(handler: httpx.MockTransport, timeout_s: float = 5.0) -> JevBackend:

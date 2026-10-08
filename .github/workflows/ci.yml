@@ -21,7 +21,9 @@ jobs:
       - name: Format check
         run: ruff format --check .
       - name: Tests (offline, fixture-based)
-        run: pytest -q
+        # pytest.ini already passes -q; adding another here makes it -qq,
+        # which suppresses the "N passed" line and hides the count from logs.
+        run: pytest
         env:
           HF_HUB_OFFLINE: "1"
 
