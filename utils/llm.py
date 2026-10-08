@@ -16,6 +16,7 @@ decision for the rest of the process.
 from __future__ import annotations
 
 import logging
+import time
 
 from langchain_anthropic import ChatAnthropic
 
@@ -43,16 +44,41 @@ class LLMClient:
         self._llm = _build(model, temperature, max_tokens)
 
     def invoke(self, messages, **kwargs):
+        started = time.perf_counter()
         try:
-            return self._check_output(self._llm.invoke(messages, **kwargs))
+            return self._record_generation(
+                self._check_output(self._llm.invoke(messages, **kwargs)), started
+            )
         except Exception as exc:  # noqa: BLE001 — re-raised unless it is the temperature case
             if self.temperature is not None and _is_temperature_error(exc):
                 logger.warning("Model %s rejects `temperature` — retrying without it", self.model)
                 _NO_TEMPERATURE.add(self.model)
                 self.temperature = None
                 self._llm = _build(self.model, None, self.max_tokens)
-                return self._check_output(self._llm.invoke(messages, **kwargs))
+                return self._record_generation(
+                    self._check_output(self._llm.invoke(messages, **kwargs)), started
+                )
             raise
+
+    def _record_generation(self, response, started: float):
+        """Record the call into the active Langfuse RunTrace, if any."""
+        try:
+            from utils.cost import _read_usage
+            from utils.tracing import current_trace
+
+            trace = current_trace()
+            if trace is not None and trace.enabled:
+                input_tokens, output_tokens = _read_usage(response)
+                trace.generation(
+                    model=self.model,
+                    label=f"llm:{self.model}",
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    latency_ms=(time.perf_counter() - started) * 1000,
+                )
+        except Exception:  # noqa: BLE001 — tracing must never fail a call
+            pass
+        return response
 
     def _check_output(self, response):
         """

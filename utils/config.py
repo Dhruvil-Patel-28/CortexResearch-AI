@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     evals_judge_model: str = Field(default="", description="Model for LLM-as-judge; empty = model_fast tier")
     evals_guardrail_min_precision: float = Field(default=0.9, description="CI gate: min scanner precision")
     evals_guardrail_min_recall: float = Field(default=0.9, description="CI gate: min scanner recall")
+
+    # Langfuse observability (Phase 3) — tracing is fully no-op without keys
+    langfuse_enabled: bool = Field(default=True, description="Master switch for Langfuse tracing")
+    langfuse_public_key: str = Field(default="", description="Langfuse public key; empty = tracing disabled")
+    langfuse_secret_key: str = Field(default="", description="Langfuse secret key")
+    langfuse_host: str = Field(default="http://localhost:3000", description="Langfuse base URL")
     temperature: float = Field(default=0.7, ge=0.0, le=2.0, description="Default LLM temperature")
     max_tokens_smart: int = Field(default=16384, description="Max output tokens for the smart tier (full-report JSON must fit)")
     max_tokens_fast: int = Field(default=2048, description="Max output tokens for the fast tier")
