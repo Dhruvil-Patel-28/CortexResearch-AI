@@ -1,0 +1,71 @@
+{
+  "query": "What is the Jevons paradox and its relevance to AI infrastructure economics",
+  "title": "Jevons paradox and AI infrastructure economics: consistent with the data, not proven by it",
+  "depth": "standard",
+  "tldr": [
+    "The Jevons paradox — efficiency gains increasing total resource consumption — is frequently cited in AI infrastructure debates.",
+    "Historical evidence supports the paradox for some resources, but AI-specific evidence is thinner than commentary implies.",
+    "Algorithmic efficiency gains (e.g. DeepSeek-style training improvements) have so far coincided with rising aggregate compute demand.",
+    "Datacenter energy projections from credible bodies (IEA, EPRI) show steep growth regardless of the paradox framing.",
+    "The paradox is best treated as a hypothesis about AI compute, not an established fact."
+  ],
+  "executive_summary": "The Jevons paradox observes that as technology makes a resource cheaper to use per unit of output, total consumption of that resource often rises rather than falls. In January 2025 the paradox re-entered mainstream debate when a prominent venture capitalist invoked it after DeepSeek's efficient training run: if AI compute gets dramatically cheaper, demand for compute may explode rather than shrink. This report traces the concept from William Stanley Jevons's 1865 coal analysis through modern datacenter energy data, and finds the historical record strongly supports the paradox in general, while the AI-specific extrapolation rests on thinner evidence — plausible, but not proven. The practical implication for infrastructure planning is to model demand elasticity explicitly rather than assume efficiency gains reduce total consumption.",
+  "background_primer": "William Stanley Jevons was a British economist who, in The Coal Question (1865), noticed something counterintuitive: as steam engines became more efficient at converting coal into work, Britain burned more coal, not less. Cheaper effective energy made new uses economical, expanding total demand. Economists now call this the rebound effect, and 'Jevons paradox' is the strong form: efficiency improvements increase total consumption of the resource. Whether the paradox binds depends on how elastic demand is — how much extra consumption a price drop unlocks. For AI, the resource in question is compute: GPU-hours, electricity, and datacenter capacity. If a breakthrough lets a model be trained for a tenth of the compute, two things can happen: less total compute is bought (efficiency wins), or far more models get trained because training is suddenly affordable (Jevons wins).",
+  "key_developments": [
+    {
+      "claim": "DeepSeek's January 2025 efficiency claims triggered the modern Jevons-paradox debate around AI compute demand.",
+      "evidence": "A prominent venture capitalist publicly invoked the paradox arguing that cheaper AI inference would expand, not shrink, total compute demand.",
+      "sources": ["s1", "s2"],
+      "confidence": "high"
+    },
+    {
+      "claim": "Datacenter electricity demand is projected to grow steeply through 2030 regardless of efficiency trends.",
+      "evidence": "The IEA projects datacenter electricity consumption roughly doubling by 2030, driven substantially by AI workloads.",
+      "sources": ["s3"],
+      "confidence": "high"
+    },
+    {
+      "claim": "Historical rebound effects are well documented for energy commodities, supporting the paradox's general form.",
+      "evidence": "Studies of coal, lighting, and transport show efficiency gains frequently accompanied by rising total resource use.",
+      "sources": ["s4"],
+      "confidence": "medium"
+    }
+  ],
+  "technical_explainer": "Formally, let E be total resource use, A the efficiency (output per unit resource), and O total output. E = O / A. Jevons dynamics occur when output O grows faster than efficiency A — i.e., when the elasticity of output with respect to effective cost exceeds 1. For AI compute, the elastic channel is the set of uses that become economical at lower cost: smaller labs training frontier-adjacent models, inference embedded in consumer products, synthetic data generation at scale. The inelastic channel is replacement demand — the same workload run more cheaply. Empirically separating these channels requires workload-level data that cloud providers do not publish, which is why the AI-specific debate remains inference rather than measurement.",
+  "timeline": [
+    {"date": "1865", "event": "Jevons publishes The Coal Question, observing that steam-engine efficiency increased British coal consumption.", "source_ids": ["s4"]},
+    {"date": "2025-01", "event": "DeepSeek's low-cost training run prompts public invocation of the paradox for AI compute.", "source_ids": ["s1", "s2"]},
+    {"date": "2025-04", "event": "IEA Energy & AI report projects datacenter electricity demand roughly doubling by 2030.", "source_ids": ["s3"]}
+  ],
+  "implications": "For anyone planning AI infrastructure spend, the actionable point is demand elasticity: efficiency improvements are only cost savings if your workloads are fixed. If your organisation's AI usage grows with affordability — and most roadmaps assume it does — efficiency gains convert into more compute consumed, not less budget. Vendors marketing efficiency as a deflationary force should be read with the rebound effect in mind.",
+  "risks_and_uncertainty": "The AI-specific extrapolation of the paradox rests on limited public workload data; cloud providers' demand composition is opaque. Projections from the IEA and EPRI have historically been revised, in both directions. The paradox is a hypothesis about aggregate behaviour, not a law — sectors with inelastic demand (mature markets with fixed workloads) have escaped it historically.",
+  "what_to_watch_next": [
+    "Hyperscaler capex guidance versus realized revenue per GPU-hour",
+    "IEA and EPRI datacenter demand forecast revisions",
+    "Inference-cost trends relative to inference volume"
+  ],
+  "faq": [
+    {"question": "Is the Jevons paradox a law of economics?", "answer": "No. It is an observed pattern where demand is sufficiently elastic. Sectors with fixed workloads can capture efficiency gains as genuine reductions."},
+    {"question": "Did DeepSeek prove the paradox for AI?", "answer": "No. It triggered the debate by making training dramatically cheaper; whether aggregate compute demand rises or falls as a result is not yet measurable."}
+  ],
+  "glossary": [
+    {"term": "Jevons paradox", "definition": "Efficiency gains in resource use that increase total consumption of that resource."},
+    {"term": "Rebound effect", "definition": "The general phenomenon of efficiency gains being offset by increased demand."},
+    {"term": "Demand elasticity", "definition": "How strongly consumption responds to changes in effective cost."}
+  ],
+  "open_questions": [
+    "What fraction of datacenter demand is replacement versus newly-economical workloads?",
+    "Do inference-cost declines show elasticity above 1 at the market level?"
+  ],
+  "sources": [
+    {"id": "s1", "title": "DeepSeek Jevons paradox commentary", "url": "https://example.org/deepseek-jevons", "kind": "web", "published_at": "2025-01-27", "quote": "Cheaper AI means far more AI, not less."},
+    {"id": "s2", "title": "Analysis of the DeepSeek training-cost claims", "url": "https://example.org/deepseek-costs", "kind": "blog", "published_at": "2025-01-28", "quote": "The headline efficiency numbers describe training compute only."},
+    {"id": "s3", "title": "IEA Energy and AI report", "url": "https://example.org/iea-energy-ai", "kind": "report", "published_at": "2025-04-10", "quote": "Datacenter electricity consumption is set to double by 2030."},
+    {"id": "s4", "title": "The Coal Question (Jevons, 1865)", "url": "https://example.org/coal-question", "kind": "web", "published_at": "1865-01-01", "quote": "Economy in the use of coal is equivalent to a diminution of its cost of production."}
+  ],
+  "verification": {"checked": 3, "supported": 3, "unsupported": 0, "unsupported_claims": [], "notes": ""},
+  "reading_time_min": 7,
+  "model_trace": {"calls": [], "decisions": []},
+  "cost_usd": 0.12,
+  "created_at": "2026-10-08T06:30:00Z"
+}
