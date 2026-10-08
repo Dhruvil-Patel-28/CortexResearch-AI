@@ -98,6 +98,13 @@ async def search(
     hits = [SearchHit(**h) for h in raw]
     _attach_relevance(hits)
 
+    try:
+        from memory.remember import remember_search
+
+        remember_search(q)
+    except Exception:  # noqa: BLE001
+        pass
+
     graph = None
     if settings.enable_graph_rag:
         from rag.graph import graph_results

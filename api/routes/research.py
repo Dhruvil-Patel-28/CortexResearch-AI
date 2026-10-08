@@ -134,6 +134,13 @@ async def start_research(body: StartResearchRequest):
     if not verdict.allowed:
         raise HTTPException(status_code=422, detail=verdict.reason)
 
+    try:
+        from memory.remember import remember_search
+
+        remember_search(body.query)
+    except Exception:  # noqa: BLE001
+        pass
+
     started = await asyncio.to_thread(
         job_runner.start_research_job,
         body.query,

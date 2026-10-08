@@ -232,6 +232,13 @@ async def bookmark_item(item_id: str, body: BookmarkRequest | None = None):
     if not row:
         raise HTTPException(status_code=404, detail="Item not found")
     await asyncio.to_thread(db.set_bookmark, item_id, (body.note if body else ""))
+    # Remember the bookmark (no-op when Supermemory is off).
+    try:
+        from memory.remember import remember_bookmark
+
+        remember_bookmark(row, (body.note if body else ""))
+    except Exception:  # noqa: BLE001
+        pass
     row = await asyncio.to_thread(db.get_item, item_id)
     return _to_item(row)
 

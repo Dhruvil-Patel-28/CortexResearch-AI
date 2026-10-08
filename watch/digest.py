@@ -290,6 +290,13 @@ def build_digest(
             (json.dumps(delivered), digest_id),
         )
     result.update(id=digest_id, delivered=delivered)
+    # Remember the digest (no-op when Supermemory is off).
+    try:
+        from memory.remember import remember_digest
+
+        remember_digest(result)
+    except Exception:  # noqa: BLE001
+        pass
     logger.info("Digest %s built: %d stories, %d new vs previous", digest_id, len(items), delta["new_clusters"])
     return result
 

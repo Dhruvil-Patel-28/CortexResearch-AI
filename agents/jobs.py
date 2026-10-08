@@ -167,6 +167,13 @@ def start_research_job(
                     citations=result.get("citations", []),
                     cost_usd=result.get("cost_usd", 0.0),
                 )
+            # Remember the published report (no-op when Supermemory is off).
+            try:
+                from memory.remember import remember_report
+
+                remember_report({**(result.get("report") or {}), "id": brief_id or ""})
+            except Exception:  # noqa: BLE001
+                pass
             run.emit(
                 "done",
                 {

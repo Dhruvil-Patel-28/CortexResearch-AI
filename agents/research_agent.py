@@ -110,6 +110,18 @@ def run_research(
         )
 
 
+def _with_memory_recall(query: str, session_context: str) -> str:
+    """Session context + (when Supermemory is on) related past work."""
+    try:
+        from memory.remember import recall
+
+        prior = recall(query, k=3)
+    except Exception:  # noqa: BLE001 — memory must never block a run
+        prior = ""
+    parts = [p for p in (session_context.strip(), prior.strip()) if p]
+    return "\n\n".join(parts)
+
+
 def _run_pipeline(*, query, depth, session_id, item_id, emit, run_trace, meter, started, gr_start):
     logger.info("Research v2 starting | depth=%s | session=%s | query=%s", depth, session_id, query[:120])
     if emit:
@@ -120,7 +132,7 @@ def _run_pipeline(*, query, depth, session_id, item_id, emit, run_trace, meter, 
         "research_query": query,
         "depth": depth,
         "item_id": item_id or "",
-        "conversation_context": session_manager.get_context(session_id),
+        "conversation_context": _with_memory_recall(query, session_manager.get_context(session_id)),
         "research_plan": {},
         "research_data": "",
         "source_registry": [],
